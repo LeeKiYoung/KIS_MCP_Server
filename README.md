@@ -1,6 +1,38 @@
 # 한국투자증권 REST API MCP (Model Context Protocol)
 
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 한국투자증권(KIS)의 REST API를 사용하여 주식 거래 및 시세 정보를 조회하는 MCP(Model Context Protocol) 서버입니다. 국내 및 해외 주식 거래, 시세 조회, 계좌 관리 등 다양한 금융 거래 기능을 제공합니다.
+
+## ✨ 주요 기능
+
+- 🇰🇷 **국내 주식 거래**
+  - 실시간 현재가 조회
+  - 매수/매도 주문
+  - 잔고 조회
+  - 호가 정보 조회
+  - 주문 내역 조회
+
+- 🌏 **해외 주식 거래**
+  - 미국, 일본, 중국, 홍콩, 베트남 등 주요 시장 지원
+  - 실시간 현재가 조회
+  - 매수/매도 주문
+
+- ⚡ **특징**
+  - 비동기 처리로 빠른 응답
+  - 실시간 시세 및 체결 정보
+  - 안정적인 에러 처리
+  - 확장 가능한 설계
+
+## ⚠️ 주의사항
+
+이 프로젝트는 아직 개발 중인 미완성 프로젝트입니다. 실제 투자에 사용하기 전에 충분한 테스트를 거치시기 바랍니다.
+
+* 본 프로젝트를 사용하여 발생하는 모든 손실과 책임은 전적으로 사용자에게 있습니다.
+* API 사용 시 한국투자증권의 이용약관을 준수해야 합니다.
+* 실제 계좌 사용 시 주의가 필요하며, 모의투자 계좌로 충분한 테스트를 권장합니다.
+* API 호출 제한과 관련된 제약사항을 반드시 확인하시기 바랍니다.
 
 ## Requirements
 
@@ -17,7 +49,7 @@ pip install uv
 uv venv
 source .venv/bin/activate  # Linux/MacOS
 # or
-.venv\Scripts\activate  # Windows
+.venv\\Scripts\\activate  # Windows
 
 # 3. Install dependencies
 uv pip install -e .
@@ -29,45 +61,19 @@ export KIS_ACCOUNT_TYPE="VIRTUAL"  # 또는 "REAL"
 export KIS_CANO="계좌번호"
 ```
 
-## Project Structure
-
-```
-kis-mcp-server/
-├── pyproject.toml        # Project metadata and dependencies
-├── README.md            # Project documentation
-├── main.py             # Main MCP server implementation
-└── client.py           # Client implementation and examples
-```
-
-## Development
-
-### Dependencies Management
-
-이 프로젝트는 `uv`를 사용하여 의존성을 관리합니다. 새로운 패키지를 추가하려면:
-
-```bash
-# 프로덕션 의존성 추가
-uv pip install package-name
-
-# 개발 의존성 추가
-uv pip install --dev package-name
-
-# 의존성 업데이트
-uv pip compile pyproject.toml
-```
 ## Functions
 
 ### Domestic Stock Trading
 
-* **order_stock** - 국내 주식 매수/매도 주문
+* **inquery_stock_price** - 주식 현재가 조회
   * `symbol`: 종목코드 (예: "005930") (string, required)
+  * Returns: 현재가, 전일대비, 등락률, 거래량 등
+
+* **order_stock** - 주식 매수/매도 주문
+  * `symbol`: 종목코드 (string, required)
   * `quantity`: 주문수량 (number, required)
   * `price`: 주문가격 (0: 시장가) (number, required)
   * `order_type`: 주문유형 ("buy" 또는 "sell") (string, required)
-
-* **inquery_stock_price** - 실시간 현재가 조회
-  * `symbol`: 종목코드 (string, required)
-  * Returns: 현재가, 전일대비, 등락률, 거래량 등
 
 * **inquery_balance** - 계좌 잔고 조회
   * Returns: 보유종목, 평가금액, 손익현황 등
@@ -79,6 +85,10 @@ uv pip compile pyproject.toml
 * **inquery_order_detail** - 주문 상세 내역 조회
   * `order_no`: 주문번호 (string, required)
   * `order_date`: 주문일자 (YYYYMMDD) (string, required)
+
+* **inquery_stock_ask** - 호가 정보 조회
+  * `symbol`: 종목코드 (string, required)
+  * Returns: 매도/매수 호가, 호가수량 등
 
 ### Overseas Stock Trading
 
@@ -102,97 +112,49 @@ uv pip compile pyproject.toml
   * `symbol`: 종목코드 (string, required)
   * `market`: 시장코드 (string, required)
 
-### Market Information
-
-* **inquery_stock_info** - 일별 주가 정보 조회
-  * `symbol`: 종목코드 (string, required)
-  * `start_date`: 조회 시작일 (YYYYMMDD) (string, required)
-  * `end_date`: 조회 종료일 (YYYYMMDD) (string, required)
-
-* **inquery_stock_history** - 주가 히스토리 조회
-  * `symbol`: 종목코드 (string, required)
-  * `start_date`: 조회 시작일 (YYYYMMDD) (string, required)
-  * `end_date`: 조회 종료일 (YYYYMMDD) (string, required)
-
-* **inquery_stock_ask** - 호가 정보 조회
-  * `symbol`: 종목코드 (string, required)
-
 ## Resources
 
 ### Configuration
 
-* **Environment Variables**
-  * **Template**: `.env` 파일 또는 환경변수 설정
-  * **Parameters**:
-    * `KIS_APP_KEY`: API 앱키 (string, required)
-    * `KIS_APP_SECRET`: API 시크릿키 (string, required)
-    * `KIS_ACCOUNT_TYPE`: 계정타입 ("REAL" 또는 "VIRTUAL") (string, required)
-    * `KIS_CANO`: 계좌번호 (string, required)
+환경 변수를 통해 API 키와 계좌 정보를 설정합니다:
+
+* `KIS_APP_KEY`: 한국투자증권 앱키
+* `KIS_APP_SECRET`: 한국투자증권 시크릿키
+* `KIS_ACCOUNT_TYPE`: 계좌 타입 ("REAL" 또는 "VIRTUAL")
+* `KIS_CANO`: 계좌번호
 
 ### Trading Hours
 
-* **Domestic Market**
-  * 정규장: 09:00 ~ 15:30
-  * 시간외 단일가:
-    * 장 개시 전: 08:30 ~ 09:00
-    * 장 종료 후: 15:40 ~ 16:00
+국내 주식:
+* 정규장: 09:00 ~ 15:30
+* 시간외 단일가: 15:40 ~ 16:00
 
-* **Overseas Market**
-  * 각 시장별 거래시간 준수
-  * 휴장일 거래 불가
-
-## Library Usage
-
-```python
-# 1. 주식 현재가 조회
-result = await inquery_stock_price(symbol="005930")
-print(f"현재가: {result['stck_prpr']}")
-print(f"전일대비: {result['prdy_vrss']} ({result['prdy_ctrt']}%)")
-
-# 2. 주식 매수 주문
-result = await order_stock(
-    symbol="005930",
-    quantity=1,
-    price=0,  # 시장가 주문
-    order_type="buy"
-)
-
-# 3. 해외주식 매수 주문
-result = await order_overseas_stock(
-    symbol="AAPL",
-    quantity=1,
-    price=150.00,
-    order_type="buy",
-    market="NASD"
-)
-```
+해외 주식:
+* 미국(나스닥/뉴욕): 22:30 ~ 05:00 (한국시간)
+* 일본: 09:00 ~ 15:10
+* 중국: 10:30 ~ 16:00
+* 홍콩: 10:30 ~ 16:00
+* 베트남: 11:15 ~ 16:15
 
 ## Error Handling
 
-### Error Codes
-* `20010000`: 요청 성공
-* `40580000`: 모의투자 장종료
-* `40010001`: 주문가능 시간이 아님
-* `40010002`: 잔고 부족
+API 호출 시 발생할 수 있는 주요 에러:
 
-### Best Practices
-* 모든 API 호출은 try-catch로 감싸서 사용
-* 에러 발생 시 응답의 msg1 필드 확인
-* 주문 실패 시 error_description 필드 확인
+* 인증 오류: API 키 또는 시크릿키가 잘못된 경우
+* 잔고 부족: 주문 금액이 계좌 잔고보다 큰 경우
+* 시간 제한: 거래 시간이 아닌 경우
+* 주문 제한: 주문 수량이나 금액이 제한을 초과한 경우
 
 ## About
 
-이 프로젝트는 한국투자증권의 공식 REST API를 사용하여 개발된 MCP 서버입니다. 비동기 처리를 지원하며, 자동 토큰 갱신 및 에러 핸들링 기능을 제공합니다.
-
-### Features
-* 비동기 처리 지원 (asyncio 기반)
-* 자동 토큰 갱신
-* 체계적인 에러 핸들링
-* 모듈화된 구조
 * 확장 가능한 설계
+* 비동기 처리로 빠른 응답
+* 실시간 시세 및 체결 정보
+* 안정적인 에러 처리
 
-### License
-이 프로젝트는 MIT 라이선스 하에 제공됩니다.
+## License
+
+MIT License
 
 
 
