@@ -3,10 +3,11 @@ import logging
 import os
 import sys
 from dotenv import load_dotenv
+from pathlib import Path
 from datetime import datetime, timedelta
 
 import httpx
-from fastmcp import FastMCP
+from mcp.server.fastmcp.server import FastMCP
 
 # 로깅 설정: 반드시 stderr로 출력
 logging.basicConfig(

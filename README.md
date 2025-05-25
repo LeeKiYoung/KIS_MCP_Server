@@ -54,12 +54,46 @@ source .venv/bin/activate  # Linux/MacOS
 # 3. Install dependencies
 uv pip install -e .
 
-# 4. Set environment variables
-export KIS_APP_KEY="앱키"
-export KIS_APP_SECRET="시크릿키"
-export KIS_ACCOUNT_TYPE="VIRTUAL"  # 또는 "REAL"
-export KIS_CANO="계좌번호"
+mcp install server.py \
+    -v KIS_APP_KEY={KIS_APP_KEY} \
+    -v KIS_APP_SECRET={KIS_APP_SECRET} \
+    -v KIS_ACCOUNT_TYPE={KIS_ACCOUNT_TYPE} \
+    -v KIS_CANO={KIS_CANO}
 ```
+
+### MCP Server Configuration
+
+You can also configure the MCP server using a JSON configuration file. Create a file named `mcp-config.json` with the following content (replace the paths and environment variables with your own):
+
+```json
+{
+  "mcpServers": {
+    "KIS MCP Server": {
+      "command": "/opt/homebrew/bin/uv",
+      "args": [
+        "run",
+        "--with",
+        "httpx",
+        "--with",
+        "mcp[cli]",
+        "--with",
+        "xmltodict",
+        "mcp",
+        "run",
+        "/path/to/your/project/server.py"
+      ],
+      "env": {
+        "KIS_APP_KEY": "your_app_key",
+        "KIS_APP_SECRET": "your_secret_key",
+        "KIS_ACCOUNT_TYPE": "VIRTUAL",
+        "KIS_CANO": "your_account_number"
+      }
+    }
+  }
+}
+```
+
+This configuration can be used with MCP-compatible tools and IDEs to run the server with the specified dependencies and environment variables.
 
 ## Functions
 
@@ -155,6 +189,3 @@ API 호출 시 발생할 수 있는 주요 에러:
 ## License
 
 MIT License
-
-
-
