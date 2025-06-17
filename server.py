@@ -164,7 +164,7 @@ class TrIdManager:
         return DOMAIN if is_real_account else VIRTUAL_DOMAIN
 
 # Token storage
-TOKEN_FILE = Path("token.json")
+TOKEN_FILE = Path(__file__).resolve().parent / "token.json"
 
 def load_token():
     """Load token from file if it exists and is not expired"""
