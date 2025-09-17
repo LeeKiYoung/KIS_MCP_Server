@@ -81,6 +81,10 @@ This configuration can be used with MCP-compatible tools and IDEs to run the ser
 * `KIS_ACCOUNT_TYPE`: 계좌 타입 ("REAL" 또는 "VIRTUAL")
 * `KIS_CANO`: 계좌번호
 
+#### 주의사항
+* `KIS_APP_SECRET`, `KIS_APP_SECRET` 한국투자증권 앱에서 발급 가능
+* `접근토큰 유효기간`: 발급시점부터 24시간
+
 ### Trading Hours
 
 해외 주식:
@@ -89,7 +93,3 @@ This configuration can be used with MCP-compatible tools and IDEs to run the ser
 * 중국: 10:30 ~ 16:00
 * 홍콩: 10:30 ~ 16:00
 * 베트남: 11:15 ~ 16:15
-
-## License
-
-MIT License
