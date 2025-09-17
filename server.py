@@ -2,6 +2,8 @@ import json
 import logging
 import os
 import sys
+from typing import Optional
+
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -31,22 +33,8 @@ DOMAIN = "https://openapi.koreainvestment.com:9443"
 VIRTUAL_DOMAIN = "https://openapivts.koreainvestment.com:29443"  # 모의투자
 
 # API paths
-STOCK_PRICE_PATH = "/uapi/domestic-stock/v1/quotations/inquire-price"  # 현재가조회
-BALANCE_PATH = "/uapi/domestic-stock/v1/trading/inquire-balance"  # 잔고조회
 TOKEN_PATH = "/oauth2/tokenP"  # 토큰발급
 HASHKEY_PATH = "/uapi/hashkey"  # 해시키발급
-ORDER_PATH = "/uapi/domestic-stock/v1/trading/order-cash"  # 현금주문
-ORDER_LIST_PATH = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld"  # 일별주문체결조회
-ORDER_DETAIL_PATH = "/uapi/domestic-stock/v1/trading/inquire-ccnl"  # 주문체결내역조회
-STOCK_INFO_PATH = "/uapi/domestic-stock/v1/quotations/inquire-daily-price"  # 일별주가조회
-STOCK_HISTORY_PATH = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"  # 주식일별주가조회
-STOCK_ASK_PATH = "/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn"  # 주식호가조회
-
-# 해외주식 API 경로
-OVERSEAS_STOCK_PRICE_PATH = "/uapi/overseas-price/v1/quotations/price"
-OVERSEAS_ORDER_PATH = "/uapi/overseas-stock/v1/trading/order"
-OVERSEAS_BALANCE_PATH = "/uapi/overseas-stock/v1/trading/inquire-balance"
-OVERSEAS_ORDER_LIST_PATH = "/uapi/overseas-stock/v1/trading/inquire-daily-ccld"
 
 # Headers and other constants
 CONTENT_TYPE = "application/json"
@@ -248,487 +236,12 @@ async def get_hashkey(client: httpx.AsyncClient, token: str, body: dict) -> str:
     
     return response.json()["HASH"]
 
-@mcp.tool(
-    name="inquery-stock-price",
-    description="Get current stock price information from Korea Investment & Securities",
-)
-async def inquery_stock_price(symbol: str):
-    """
-    Get current stock price information from Korea Investment & Securities
-    
-    Args:
-        symbol: Stock symbol (e.g. "005930" for Samsung Electronics)
-        
-    Returns:
-        Dictionary containing stock price information including:
-        - stck_prpr: Current price
-        - prdy_vrss: Change from previous day
-        - prdy_vrss_sign: Change direction (+/-)
-        - prdy_ctrt: Change rate (%)
-        - acml_vol: Accumulated volume
-        - acml_tr_pbmn: Accumulated trade value
-        - hts_kor_isnm: Stock name in Korean
-        - stck_mxpr: High price of the day
-        - stck_llam: Low price of the day
-        - stck_oprc: Opening price
-        - stck_prdy_clpr: Previous day's closing price
-    """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        response = await client.get(
-            f"{TrIdManager.get_domain('price')}{STOCK_PRICE_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": TrIdManager.get_tr_id("price")
-            },
-            params={
-                "fid_cond_mrkt_div_code": "J",
-                "fid_input_iscd": symbol
-            }
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to get stock price: {response.text}")
-        
-        return response.json()["output"]
 
 @mcp.tool(
-    name="inquery-balance",
-    description="Get current stock balance information from Korea Investment & Securities",
+    name="price",
+    description="기본시세 > 해외주식 현재체결가",
 )
-async def inquery_balance():
-    """
-    Get current stock balance information from Korea Investment & Securities
-    
-    Returns:
-        Dictionary containing stock balance information including:
-        - pdno: Stock code
-        - prdt_name: Stock name
-        - hldg_qty: Holding quantity
-        - pchs_amt: Purchase amount
-        - prpr: Current price
-        - evlu_amt: Evaluation amount
-        - evlu_pfls_amt: Evaluation profit/loss amount
-        - evlu_pfls_rt: Evaluation profit/loss rate
-    """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        logger.info(f"TrIdManager.get_tr_id('balance'): {TrIdManager.get_tr_id('balance')}")
-        # Prepare request data
-        request_data = {
-            "CANO": os.environ["KIS_CANO"],  # 계좌번호
-            "ACNT_PRDT_CD": "01",  # 계좌상품코드 (기본값: 01)
-            "AFHR_FLPR_YN": "N",  # 시간외단일가여부
-            "INQR_DVSN": "01",  # 조회구분
-            "UNPR_DVSN": "01",  # 단가구분
-            "FUND_STTL_ICLD_YN": "N",  # 펀드결제분포함여부
-            "FNCG_AMT_AUTO_RDPT_YN": "N",  # 융자금액자동상환여부
-            "PRCS_DVSN": "00",  # 처리구분
-            "CTX_AREA_FK100": "",  # 연속조회검색조건100
-            "CTX_AREA_NK100": "",  # 연속조회키100
-            "OFL_YN": ""  # 오프라인여부
-        }
-        response = await client.get(
-            f"{TrIdManager.get_domain('balance')}{BALANCE_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": TrIdManager.get_tr_id("balance")
-            },
-            params=request_data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to get balance: {response.text}")
-        
-        return response.json()
-
-@mcp.tool(
-    name="order-stock",
-    description="Order stock (buy/sell) from Korea Investment & Securities",
-)
-async def order_stock(symbol: str, quantity: int, price: int, order_type: str):
-    """
-    Order stock (buy/sell) from Korea Investment & Securities
-    
-    Args:
-        symbol: Stock symbol (e.g. "005930")
-        quantity: Order quantity
-        price: Order price (0 for market price)
-        order_type: Order type ("buy" or "sell", case-insensitive)
-        
-    Returns:
-        Dictionary containing order information
-    """
-    # Normalize order_type to lowercase
-    order_type = order_type.lower()
-    if order_type not in ["buy", "sell"]:
-        raise ValueError('order_type must be either "buy" or "sell"')
-
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        
-        # Prepare request data
-        request_data = {
-            "CANO": os.environ["KIS_CANO"],  # 계좌번호
-            "ACNT_PRDT_CD": "01",  # 계좌상품코드
-            "PDNO": symbol,  # 종목코드
-            "ORD_DVSN": "01" if price == 0 else "00",  # 주문구분 (01: 시장가, 00: 지정가)
-            "ORD_QTY": str(quantity),  # 주문수량
-            "ORD_UNPR": str(price),  # 주문단가
-        }
-        
-        # Get hashkey
-        hashkey = await get_hashkey(client, token, request_data)
-        
-        response = await client.post(
-            f"{TrIdManager.get_domain(order_type)}{ORDER_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": TrIdManager.get_tr_id(order_type),
-                "hashkey": hashkey
-            },
-            json=request_data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to order stock: {response.text}")
-        
-        return response.json()
-
-@mcp.tool(
-    name="inquery-order-list",
-    description="Get daily order list from Korea Investment & Securities",
-)
-async def inquery_order_list(start_date: str, end_date: str):
-    """
-    Get daily order list from Korea Investment & Securities
-    
-    Args:
-        start_date: Start date (YYYYMMDD)
-        end_date: End date (YYYYMMDD)
-        
-    Returns:
-        Dictionary containing order list information
-    """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        
-        # Prepare request data
-        request_data = {
-            "CANO": os.environ["KIS_CANO"],  # 계좌번호
-            "ACNT_PRDT_CD": "01",  # 계좌상품코드
-            "INQR_STRT_DT": start_date,  # 조회시작일자
-            "INQR_END_DT": end_date,  # 조회종료일자
-            "SLL_BUY_DVSN_CD": "00",  # 매도매수구분
-            "INQR_DVSN": "00",  # 조회구분
-            "PDNO": "",  # 종목코드
-            "CCLD_DVSN": "00",  # 체결구분
-            "ORD_GNO_BRNO": "",  # 주문채번지점번호
-            "ODNO": "",  # 주문번호
-            "INQR_DVSN_3": "00",  # 조회구분3
-            "INQR_DVSN_1": "",  # 조회구분1
-            "CTX_AREA_FK100": "",  # 연속조회검색조건100
-            "CTX_AREA_NK100": "",  # 연속조회키100
-        }
-        
-        response = await client.get(
-            f"{TrIdManager.get_domain('order_list')}{ORDER_LIST_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": TrIdManager.get_tr_id("order_list")
-            },
-            params=request_data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to get order list: {response.text}")
-        
-        return response.json()
-
-@mcp.tool(
-    name="inquery-order-detail",
-    description="Get order detail from Korea Investment & Securities",
-)
-async def inquery_order_detail(order_no: str, order_date: str):
-    """
-    Get order detail from Korea Investment & Securities
-    
-    Args:
-        order_no: Order number
-        order_date: Order date (YYYYMMDD)
-        
-    Returns:
-        Dictionary containing order detail information
-    """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        
-        # Prepare request data
-        request_data = {
-            "CANO": os.environ["KIS_CANO"],  # 계좌번호
-            "ACNT_PRDT_CD": "01",  # 계좌상품코드
-            "INQR_DVSN": "00",  # 조회구분
-            "PDNO": "",  # 종목코드
-            "ORD_STRT_DT": order_date,  # 주문시작일자
-            "ORD_END_DT": order_date,  # 주문종료일자
-            "SLL_BUY_DVSN_CD": "00",  # 매도매수구분
-            "CCLD_DVSN": "00",  # 체결구분
-            "ORD_GNO_BRNO": "",  # 주문채번지점번호
-            "ODNO": order_no,  # 주문번호
-            "INQR_DVSN_3": "00",  # 조회구분3
-            "INQR_DVSN_1": "",  # 조회구분1
-            "CTX_AREA_FK100": "",  # 연속조회검색조건100
-            "CTX_AREA_NK100": "",  # 연속조회키100
-        }
-        
-        response = await client.get(
-            f"{TrIdManager.get_domain('order_detail')}{ORDER_DETAIL_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": TrIdManager.get_tr_id("order_detail")
-            },
-            params=request_data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to get order detail: {response.text}")
-        
-        return response.json()
-
-@mcp.tool(
-    name="inquery-stock-info",
-    description="Get daily stock price information from Korea Investment & Securities",
-)
-async def inquery_stock_info(symbol: str, start_date: str, end_date: str):
-    """
-    Get daily stock price information from Korea Investment & Securities
-    
-    Args:
-        symbol: Stock symbol (e.g. "005930")
-        start_date: Start date (YYYYMMDD)
-        end_date: End date (YYYYMMDD)
-        
-    Returns:
-        Dictionary containing daily stock price information
-    """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        
-        # Prepare request data
-        request_data = {
-            "FID_COND_MRKT_DIV_CODE": "J",  # 시장구분
-            "FID_INPUT_ISCD": symbol,  # 종목코드
-            "FID_INPUT_DATE_1": start_date,  # 시작일자
-            "FID_INPUT_DATE_2": end_date,  # 종료일자
-            "FID_PERIOD_DIV_CODE": "D",  # 기간분류코드
-            "FID_ORG_ADJ_PRC": "0",  # 수정주가원구분
-        }
-        
-        response = await client.get(
-            f"{TrIdManager.get_domain('stock_info')}{STOCK_INFO_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": TrIdManager.get_tr_id("stock_info")
-            },
-            params=request_data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to get stock info: {response.text}")
-        
-        return response.json()
-
-@mcp.tool(
-    name="inquery-stock-history",
-    description="Get daily stock price history from Korea Investment & Securities",
-)
-async def inquery_stock_history(symbol: str, start_date: str, end_date: str):
-    """
-    Get daily stock price history from Korea Investment & Securities
-    
-    Args:
-        symbol: Stock symbol (e.g. "005930")
-        start_date: Start date (YYYYMMDD)
-        end_date: End date (YYYYMMDD)
-        
-    Returns:
-        Dictionary containing daily stock price history
-    """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        
-        # Prepare request data
-        request_data = {
-            "FID_COND_MRKT_DIV_CODE": "J",  # 시장구분
-            "FID_INPUT_ISCD": symbol,  # 종목코드
-            "FID_INPUT_DATE_1": start_date,  # 시작일자
-            "FID_INPUT_DATE_2": end_date,  # 종료일자
-            "FID_PERIOD_DIV_CODE": "D",  # 기간분류코드
-            "FID_ORG_ADJ_PRC": "0",  # 수정주가원구분
-        }
-        
-        response = await client.get(
-            f"{TrIdManager.get_domain('stock_history')}{STOCK_HISTORY_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": TrIdManager.get_tr_id("stock_history")
-            },
-            params=request_data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to get stock history: {response.text}")
-        
-        return response.json()
-
-@mcp.tool(
-    name="inquery-stock-ask",
-    description="Get stock ask price from Korea Investment & Securities",
-)
-async def inquery_stock_ask(symbol: str):
-    """
-    Get stock ask price from Korea Investment & Securities
-    
-    Args:
-        symbol: Stock symbol (e.g. "005930")
-        
-    Returns:
-        Dictionary containing stock ask price information
-    """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        
-        # Prepare request data
-        request_data = {
-            "FID_COND_MRKT_DIV_CODE": "J",  # 시장구분
-            "FID_INPUT_ISCD": symbol,  # 종목코드
-        }
-        
-        response = await client.get(
-            f"{TrIdManager.get_domain('stock_ask')}{STOCK_ASK_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": TrIdManager.get_tr_id("stock_ask")
-            },
-            params=request_data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to get stock ask: {response.text}")
-        
-        return response.json()
-
-@mcp.tool(
-    name="order-overseas-stock",
-    description="Order overseas stock (buy/sell) from Korea Investment & Securities",
-)
-async def order_overseas_stock(symbol: str, quantity: int, price: float, order_type: str, market: str):
-    """
-    Order overseas stock (buy/sell)
-    
-    Args:
-        symbol: Stock symbol (e.g. "AAPL")
-        quantity: Order quantity
-        price: Order price (0 for market price)
-        order_type: Order type ("buy" or "sell", case-insensitive)
-        market: Market code ("NASD" for NASDAQ, "NYSE" for NYSE, etc.)
-        
-    Returns:
-        Dictionary containing order information
-    """
-    # Normalize order_type to lowercase
-    order_type = order_type.lower()
-    if order_type not in ["buy", "sell"]:
-        raise ValueError('order_type must be either "buy" or "sell"')
-
-    # Normalize market code to uppercase
-    market = market.upper()
-    if market not in MARKET_CODES:
-        raise ValueError(f"Unsupported market: {market}. Supported markets: {', '.join(MARKET_CODES.keys())}")
-
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        
-        # Get market prefix for TR_ID
-        market_prefix = {
-            "NASD": "us",  # 나스닥
-            "NYSE": "us",  # 뉴욕
-            "AMEX": "us",  # 아멕스
-            "SEHK": "hk",  # 홍콩
-            "SHAA": "sh",  # 중국상해
-            "SZAA": "sz",  # 중국심천
-            "TKSE": "jp",  # 일본
-            "HASE": "vn",  # 베트남 하노이
-            "VNSE": "vn",  # 베트남 호치민
-        }.get(market)
-        
-        if not market_prefix:
-            raise ValueError(f"Unsupported market: {market}")
-            
-        tr_id_key = f"{market_prefix}_{order_type}"
-        tr_id = TrIdManager.get_tr_id(tr_id_key)
-        
-        if not tr_id:
-            raise ValueError(f"Invalid operation type: {tr_id_key}")
-        
-        # Prepare request data
-        request_data = {
-            "CANO": os.environ["KIS_CANO"],           # 계좌번호
-            "ACNT_PRDT_CD": "01",                     # 계좌상품코드
-            "OVRS_EXCG_CD": market,                   # 해외거래소코드
-            "PDNO": symbol,                           # 종목코드
-            "ORD_QTY": str(quantity),                 # 주문수량
-            "OVRS_ORD_UNPR": str(price),             # 주문단가
-            "ORD_SVR_DVSN_CD": "0",                  # 주문서버구분코드
-            "ORD_DVSN": "00" if price > 0 else "01"  # 주문구분 (00: 지정가, 01: 시장가)
-        }
-        
-        response = await client.post(
-            f"{TrIdManager.get_domain(order_type)}{OVERSEAS_ORDER_PATH}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            json=request_data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to order overseas stock: {response.text}")
-        
-        return response.json()
-
-@mcp.tool(
-    name="inquery-overseas-stock-price",
-    description="Get overseas stock price from Korea Investment & Securities",
-)
-async def inquery_overseas_stock_price(symbol: str, market: str):
+async def price(symbol: str, market: str):
     """
     Get overseas stock price
     
@@ -741,9 +254,11 @@ async def inquery_overseas_stock_price(symbol: str, market: str):
     """
     async with httpx.AsyncClient() as client:
         token = await get_access_token(client)
-        
+
+        api_url = "/uapi/overseas-price/v1/quotations/price"
+
         response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{OVERSEAS_STOCK_PRICE_PATH}",
+            f"{TrIdManager.get_domain('buy')}{api_url}",
             headers={
                 "content-type": CONTENT_TYPE,
                 "authorization": f"{AUTH_TYPE} {token}",
@@ -762,6 +277,1948 @@ async def inquery_overseas_stock_price(symbol: str, market: str):
             raise Exception(f"Failed to get overseas stock price: {response.text}")
         
         return response.json()
+
+
+@mcp.tool(
+    name="brknews-title",
+    description="시세분석 > 해외속보(제목)",
+)
+async def brknews_title(
+    fid_news_ofer_entp_code: str,  # [필수] 뉴스제공업체코드 (ex. 0:전체조회)
+    fid_cond_scr_div_code: str,  # [필수] 조건화면분류코드 (ex. 11801)
+    fid_cond_mrkt_cls_code: str = "",  # 조건시장구분코드
+    fid_input_iscd: str = "",  # 입력종목코드
+    fid_titl_cntt: str = "",  # 제목내용
+    fid_input_date_1: str = "",  # 입력날짜1
+    fid_input_hour_1: str = "",  # 입력시간1
+    fid_rank_sort_cls_code: str = "",  # 순위정렬구분코드
+    fid_input_srno: str = ""  # 입력일련번호
+):
+    """
+    해외속보(제목) API입니다.
+    한국투자 HTS(eFriend Plus) > [7704] 해외속보 화면 의 기능을 API로 개발한 사항으로, 해당 화면을 참고하시면 기능을 이해하기 쉽습니다.
+
+    최대 100건까지 조회 가능합니다.
+
+    Args:
+        fid_news_ofer_entp_code (str): [필수] 뉴스제공업체코드 (ex. 0:전체조회)
+        fid_cond_scr_div_code (str): [필수] 조건화면분류코드 (ex. 11801)
+        fid_cond_mrkt_cls_code (str): 조건시장구분코드
+        fid_input_iscd (str): 입력종목코드
+        fid_titl_cntt (str): 제목내용
+        fid_input_date_1 (str): 입력날짜1
+        fid_input_hour_1 (str): 입력시간1
+        fid_rank_sort_cls_code (str): 순위정렬구분코드
+        fid_input_srno (str): 입력일련번호
+
+    Returns:
+        pd.DataFrame: 해외속보(제목) 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        if fid_news_ofer_entp_code == "":
+            raise ValueError("fid_news_ofer_entp_code is required (e.g. '0')")
+
+        if fid_cond_scr_div_code == "":
+            raise ValueError("fid_cond_scr_div_code is required (e.g. '11801')")
+
+        tr_id = "FHKST01011801"
+
+        api_url = "/uapi/overseas-price/v1/quotations/brknews-title"
+
+        params = {
+            "FID_NEWS_OFER_ENTP_CODE": fid_news_ofer_entp_code,
+            "FID_COND_SCR_DIV_CODE": fid_cond_scr_div_code,
+            "FID_COND_MRKT_CLS_CODE": fid_cond_mrkt_cls_code,
+            "FID_INPUT_ISCD": fid_input_iscd,
+            "FID_TITL_CNTT": fid_titl_cntt,
+            "FID_INPUT_DATE_1": fid_input_date_1,
+            "FID_INPUT_HOUR_1": fid_input_hour_1,
+            "FID_RANK_SORT_CLS_CODE": fid_rank_sort_cls_code,
+            "FID_INPUT_SRNO": fid_input_srno
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외속보(제목): {response.text}")
+
+        return response.json()
+
+
+@mcp.tool(
+    name="inquire-ccnl",
+    description="기본시세 > 해외주식 체결추이",
+)
+async def inquire_ccnl(
+    excd: str,         # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    tday: str,         # [필수] 당일전일구분 (ex. 0:전일, 1:당일)
+    symb: str,         # [필수] 종목코드 (ex. 해외종목코드)
+    auth: str = "",    # 사용자권한정보
+    keyb: str = "",    # NEXT KEY BUFF
+    tr_cont: str = "", # 연속거래여부
+    depth: int = 0,         # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10     # 최대 재귀 횟수 제한
+):
+    """
+    해외주식 체결추이 API입니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        tday (str): [필수] 당일전일구분 (ex. 0:전일, 1:당일)
+        symb (str): [필수] 종목코드 (ex. 해외종목코드)
+        auth (str): 사용자권한정보
+        keyb (str): NEXT KEY BUFF
+        tr_cont (str): 연속거래여부
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        pd.DataFrame: 해외주식 체결추이 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'NAS')")
+
+        if tday == "":
+            raise ValueError("tday is required (e.g. '0' or '1')")
+
+        if symb == "":
+            raise ValueError("symb is required (e.g. 'TSLA')")
+
+        tr_id = "HHDFS76200300"
+
+        api_url = "/uapi/overseas-price/v1/quotations/inquire-ccnl"
+
+        params = {
+            "EXCD": excd,
+            "TDAY": tday,
+            "SYMB": symb,
+            "AUTH": auth,
+            "KEYB": keyb
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외주식 체결추이: {response.text}")
+
+        return response.json()
+
+
+@mcp.tool(
+    name="price-detail",
+    description="기본시세 > 해외주식 현재가상세",
+)
+async def price_detail(
+    auth: str,  # 사용자권한정보
+    excd: str,  # 거래소명
+    symb: str,  # 종목코드
+    tr_cont: str = "",
+    depth: int = 0,
+    max_depth: int = 10
+):
+    """
+    [해외주식] 기본시세
+    해외주식 현재가상세[v1_해외주식-029]
+    해외주식 현재가상세 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        auth (str): 사용자권한정보
+        excd (str): 거래소명 (예: HKS, NYS, NAS, AMS, TSE, SHS, SZS, SHI, SZI, HSX, HNX, BAY, BAQ, BAA)
+        symb (str): 종목코드
+        tr_cont (str): 연속 거래 여부
+        depth (int): 현재 재귀 깊이
+        max_depth (int): 최대 재귀 깊이 (기본값: 10)
+
+    Returns:
+        Optional[pd.DataFrame]: 해외주식 현재가상세 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        # [필수 파라미터 검증]
+        if not excd:
+            logger.error("excd is required. (e.g. 'NAS')")
+            raise ValueError("excd is required. (e.g. 'NAS')")
+        if not symb:
+            logger.error("symb is required. (e.g. 'TSLA')")
+            raise ValueError("symb is required. (e.g. 'TSLA')")
+
+        tr_id = "HHDFS76200200"
+
+        api_url = "/uapi/overseas-price/v1/quotations/price-detail"
+
+        params = {
+            "AUTH": auth,
+            "EXCD": excd,
+            "SYMB": symb,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외주식 현재가상세: {response.text}")
+
+        return response.json()
+
+
+@mcp.tool(
+    name="news-title",
+    description="기본시세 > 해외주식 현재가상세",
+)
+async def news_title(
+    info_gb: str = "",  # [필수] 뉴스구분
+    class_cd: str = "",  # [필수] 중분류
+    nation_cd: str = "",  # [필수] 국가코드 (ex. 공백:전체, CN:중국, HK:홍콩, US:미국)
+    exchange_cd: str = "",  # [필수] 거래소코드
+    symb: str = "",  # [필수] 종목코드
+    data_dt: str = "",  # [필수] 조회일자
+    data_tm: str = "",  # [필수] 조회시간
+    cts: str = "",  # [필수] 다음키
+    tr_cont: str = "",  # [필수] 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    해외뉴스종합(제목) API입니다.
+    한국투자 HTS(eFriend Plus) > [7702] 해외뉴스종합 화면의 "우측 상단 뉴스목록" 기능을 API로 개발한 사항으로, 해당 화면을 참고하시면 기능을 이해하기 쉽습니다.
+
+    Args:
+        info_gb (str): [필수] 뉴스구분
+        class_cd (str): [필수] 중분류
+        nation_cd (str): [필수] 국가코드 (ex. 공백:전체, CN:중국, HK:홍콩, US:미국)
+        exchange_cd (str): [필수] 거래소코드
+        symb (str): [필수] 종목코드
+        data_dt (str): [필수] 조회일자
+        data_tm (str): [필수] 조회시간
+        cts (str): [필수] 다음키
+        tr_cont (str): [필수] 연속거래여부
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        pd.DataFrame: 해외뉴스종합(제목) 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        tr_id = "HHPSTH60100C1"  # 해외뉴스종합(제목)
+
+        api_url = "/uapi/overseas-price/v1/quotations/news-title"
+
+        params = {
+            "INFO_GB": info_gb,  # 뉴스구분
+            "CLASS_CD": class_cd,  # 중분류
+            "NATION_CD": nation_cd,  # 국가코드
+            "EXCHANGE_CD": exchange_cd,  # 거래소코드
+            "SYMB": symb,  # 종목코드
+            "DATA_DT": data_dt,  # 조회일자
+            "DATA_TM": data_tm,  # 조회시간
+            "CTS": cts  # 다음키
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외뉴스종합(제목): {response.text}")
+
+        return response.json()
+
+
+@mcp.tool(
+    name="inquire-time-itemchartprice",
+    description="기본시세 > 해외주식분봉조회 데이터",
+)
+async def inquire_time_itemchartprice(
+    auth: str,  # 사용자권한정보
+    excd: str,  # 거래소코드
+    symb: str,  # 종목코드
+    nmin: str,  # 분갭
+    pinc: str,  # 전일포함여부
+    next: str,  # 다음여부
+    nrec: str,  # 요청갯수
+    fill: str,  # 미체결채움구분
+    keyb: str,  # NEXT KEY BUFF
+    tr_cont: str = "",
+    depth: int = 0,
+    max_depth: int = 10
+):
+    """
+    [해외주식] 기본시세
+    해외주식분봉조회[v1_해외주식-030]
+    해외주식분봉조회 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        auth (str): "" 공백으로 입력
+        excd (str): NYS : 뉴욕 NAS : 나스닥 AMS : 아멕스  HKS : 홍콩 SHS : 상해  SZS : 심천 HSX : 호치민 HNX : 하노이 TSE : 도쿄   ※ 주간거래는 최대 1일치 분봉만 조회 가능 BAY : 뉴욕(주간) BAQ : 나스닥(주간) BAA : 아멕스(주간)
+        symb (str): 종목코드(ex. TSLA)
+        nmin (str): 분단위(1: 1분봉, 2: 2분봉, ...)
+        pinc (str): 0:당일 1:전일포함 ※ 다음조회 시 반드시 "1"로 입력
+        next (str): 처음조회 시, "" 공백 입력 다음조회 시, "1" 입력
+        nrec (str): 레코드요청갯수 (최대 120)
+        fill (str): "" 공백으로 입력
+        keyb (str): 처음 조회 시, "" 공백 입력 다음 조회 시, 이전 조회 결과의 마지막 분봉 데이터를 이용하여, 1분 전 혹은 n분 전의 시간을 입력  (형식: YYYYMMDDHHMMSS, ex. 20241014140100)
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임 (output1)
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임 (output2)
+        tr_cont (str): 연속 거래 여부
+        depth (int): 현재 재귀 깊이
+        max_depth (int): 최대 재귀 깊이 (기본값: 10)
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 해외주식분봉조회 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        # [필수 파라미터 검증]
+        if not excd:
+            logger.error("excd is required. (e.g. 'NAS')")
+            raise ValueError("excd is required. (e.g. 'NAS')")
+        if not symb:
+            logger.error("symb is required. (e.g. 'TSLA')")
+            raise ValueError("symb is required. (e.g. 'TSLA')")
+        if not nmin:
+            logger.error("nmin is required. (e.g. '5')")
+            raise ValueError("nmin is required. (e.g. '5')")
+        if not pinc:
+            logger.error("pinc is required. (e.g. '1')")
+            raise ValueError("pinc is required. (e.g. '1')")
+        if not nrec or int(nrec) > 120:
+            logger.error("nrec is required. (e.g. '120', 최대120개)")
+            raise ValueError("nrec is required. (e.g. '120', 최대120개)")
+
+        tr_id = "HHDFS76950200"
+
+        api_url = "/uapi/overseas-price/v1/quotations/inquire-time-itemchartprice"
+
+        params = {
+            "AUTH": auth,
+            "EXCD": excd,
+            "SYMB": symb,
+            "NMIN": nmin,
+            "PINC": pinc,
+            "NEXT": next,
+            "NREC": nrec,
+            "FILL": fill,
+            "KEYB": keyb,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외주식분봉조회 데이터: {response.text}")
+
+        return response.json()
+
+
+@mcp.tool(
+    name="inquire-time-indexchartprice",
+    description="기본시세 > 해외지수분봉조회 데이터",
+)
+async def inquire_time_indexchartprice(
+    fid_cond_mrkt_div_code: str,  # 조건 시장 분류 코드
+    fid_input_iscd: str,  # 입력 종목코드
+    fid_hour_cls_code: str,  # 시간 구분 코드
+    fid_pw_data_incu_yn: str,  # 과거 데이터 포함 여부
+    tr_cont: str = "",
+    depth: int = 0,
+    max_depth: int = 10
+):
+    """
+    [해외주식] 기본시세
+    해외지수분봉조회[v1_해외주식-031]
+    해외지수분봉조회 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        fid_cond_mrkt_div_code (str): N 해외지수 X 환율 KX 원화환율
+        fid_input_iscd (str): 종목번호(ex. TSLA)
+        fid_hour_cls_code (str): 0: 정규장, 1: 시간외
+        fid_pw_data_incu_yn (str): Y/N
+        tr_cont (str): 연속 거래 여부
+        depth (int): 현재 재귀 깊이
+        max_depth (int): 최대 재귀 깊이 (기본값: 10)
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 해외지수분봉조회 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        # [필수 파라미터 검증]
+        if not fid_cond_mrkt_div_code:
+            logger.error("fid_cond_mrkt_div_code is required. (e.g. 'N')")
+            raise ValueError("fid_cond_mrkt_div_code is required. (e.g. 'N')")
+        if not fid_input_iscd:
+            logger.error("fid_input_iscd is required. (e.g. 'SPX')")
+            raise ValueError("fid_input_iscd is required. (e.g. 'SPX')")
+        if not fid_hour_cls_code:
+            logger.error("fid_hour_cls_code is required. (e.g. '0')")
+            raise ValueError("fid_hour_cls_code is required. (e.g. '0')")
+        if not fid_pw_data_incu_yn:
+            logger.error("fid_pw_data_incu_yn is required. (e.g. 'Y')")
+            raise ValueError("fid_pw_data_incu_yn is required. (e.g. 'Y')")
+
+        tr_id = "FHKST03030200"
+
+        api_url = "/uapi/overseas-price/v1/quotations/inquire-time-indexchartprice"
+
+        params = {
+            "FID_COND_MRKT_DIV_CODE": fid_cond_mrkt_div_code,
+            "FID_INPUT_ISCD": fid_input_iscd,
+            "FID_HOUR_CLS_CODE": fid_hour_cls_code,
+            "FID_PW_DATA_INCU_YN": fid_pw_data_incu_yn,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외지수분봉조회 데이터: {response.text}")
+
+        return response.json()
+
+
+@mcp.tool(
+    name="inquire-search",
+    description="시세분석 > 해외주식조건검색",
+)
+async def inquire_search(
+    auth: str,  # 사용자권한정보
+    excd: str,  # 거래소코드
+    co_yn_pricecur: str,  # 현재가선택조건
+    co_st_pricecur: str,  # 현재가시작범위가
+    co_en_pricecur: str,  # 현재가끝범위가
+    co_yn_rate: str,  # 등락율선택조건
+    co_st_rate: str,  # 등락율시작율
+    co_en_rate: str,  # 등락율끝율
+    co_yn_valx: str,  # 시가총액선택조건
+    co_st_valx: str,  # 시가총액시작액
+    co_en_valx: str,  # 시가총액끝액
+    co_yn_shar: str,  # 발행주식수선택조건
+    co_st_shar: str,  # 발행주식시작수
+    co_en_shar: str,  # 발행주식끝수
+    co_yn_volume: str,  # 거래량선택조건
+    co_st_volume: str,  # 거래량시작량
+    co_en_volume: str,  # 거래량끝량
+    co_yn_amt: str,  # 거래대금선택조건
+    co_st_amt: str,  # 거래대금시작금
+    co_en_amt: str,  # 거래대금끝금
+    co_yn_eps: str,  # EPS선택조건
+    co_st_eps: str,  # EPS시작
+    co_en_eps: str,  # EPS끝
+    co_yn_per: str,  # PER선택조건
+    co_st_per: str,  # PER시작
+    co_en_per: str,  # PER끝
+    keyb: str,  # NEXT KEY BUFF
+    tr_cont: str = "",
+    depth: int = 0,
+    max_depth: int = 10
+):
+    """
+    [해외주식] 기본시세
+    해외주식조건검색[v1_해외주식-015]
+    해외주식조건검색 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        auth (str): "" (Null 값 설정)
+        excd (str): NYS : 뉴욕, NAS : 나스닥,  AMS : 아멕스  HKS : 홍콩, SHS : 상해 , SZS : 심천 HSX : 호치민, HNX : 하노이 TSE : 도쿄
+        co_yn_pricecur (str): 해당조건 사용시(1), 미사용시 필수항목아님
+        co_st_pricecur (str): 단위: 각국통화(JPY, USD, HKD, CNY, VND)
+        co_en_pricecur (str): 단위: 각국통화(JPY, USD, HKD, CNY, VND)
+        co_yn_rate (str): 해당조건 사용시(1), 미사용시 필수항목아님
+        co_st_rate (str): %
+        co_en_rate (str): %
+        co_yn_valx (str): 해당조건 사용시(1), 미사용시 필수항목아님
+        co_st_valx (str): 단위: 천
+        co_en_valx (str): 단위: 천
+        co_yn_shar (str): 해당조건 사용시(1), 미사용시 필수항목아님
+        co_st_shar (str): 단위: 천
+        co_en_shar (str): 단위: 천
+        co_yn_volume (str): 해당조건 사용시(1), 미사용시 필수항목아님
+        co_st_volume (str): 단위: 주
+        co_en_volume (str): 단위: 주
+        co_yn_amt (str): 해당조건 사용시(1), 미사용시 필수항목아님
+        co_st_amt (str): 단위: 천
+        co_en_amt (str): 단위: 천
+        co_yn_eps (str): 해당조건 사용시(1), 미사용시 필수항목아님
+        co_st_eps (str):
+        co_en_eps (str):
+        co_yn_per (str): 해당조건 사용시(1), 미사용시 필수항목아님
+        co_st_per (str):
+        co_en_per (str):
+        keyb (str): "" 공백 입력
+        tr_cont (str): 연속 거래 여부
+        depth (int): 현재 재귀 깊이
+        max_depth (int): 최대 재귀 깊이 (기본값: 10)
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 해외주식조건검색 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        # [필수 파라미터 검증]
+        if not excd:
+            logger.error("excd is required. (e.g. 'NAS')")
+            raise ValueError("excd is required. (e.g. 'NAS')")
+
+        tr_id = "HHDFS76410000"
+
+        api_url = "/uapi/overseas-price/v1/quotations/inquire-search"
+
+        params = {
+            "AUTH": auth,
+            "EXCD": excd,
+            "CO_YN_PRICECUR": co_yn_pricecur,
+            "CO_ST_PRICECUR": co_st_pricecur,
+            "CO_EN_PRICECUR": co_en_pricecur,
+            "CO_YN_RATE": co_yn_rate,
+            "CO_ST_RATE": co_st_rate,
+            "CO_EN_RATE": co_en_rate,
+            "CO_YN_VALX": co_yn_valx,
+            "CO_ST_VALX": co_st_valx,
+            "CO_EN_VALX": co_en_valx,
+            "CO_YN_SHAR": co_yn_shar,
+            "CO_ST_SHAR": co_st_shar,
+            "CO_EN_SHAR": co_en_shar,
+            "CO_YN_VOLUME": co_yn_volume,
+            "CO_ST_VOLUME": co_st_volume,
+            "CO_EN_VOLUME": co_en_volume,
+            "CO_YN_AMT": co_yn_amt,
+            "CO_ST_AMT": co_st_amt,
+            "CO_EN_AMT": co_en_amt,
+            "CO_YN_EPS": co_yn_eps,
+            "CO_ST_EPS": co_st_eps,
+            "CO_EN_EPS": co_en_eps,
+            "CO_YN_PER": co_yn_per,
+            "CO_ST_PER": co_st_per,
+            "CO_EN_PER": co_en_per,
+            "KEYB": keyb,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외주식조건검색 데이터: {response.text}")
+
+        return response.json()
+
+
+@mcp.tool(
+    name="search-info",
+    description="기본시세 > 해외주식 상품기본정보",
+)
+async def search_info(
+    prdt_type_cd: str,  # 상품유형코드
+    pdno: str,  # 상품번호
+    tr_cont: str = "",
+    depth: int = 0,
+    max_depth: int = 10
+):
+    """
+    [해외주식] 기본시세
+    해외주식 상품기본정보[v1_해외주식-034]
+    해외주식 상품기본정보 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        prdt_type_cd (str): 512  미국 나스닥 / 513  미국 뉴욕 / 529  미국 아멕스  515  일본 501  홍콩 / 543  홍콩CNY / 558  홍콩USD 507  베트남 하노이 / 508  베트남 호치민 551  중국 상해A / 552  중국 심천A
+        pdno (str): 예) AAPL (애플)
+        tr_cont (str): 연속 거래 여부
+        depth (int): 현재 재귀 깊이
+        max_depth (int): 최대 재귀 깊이 (기본값: 10)
+
+    Returns:
+        Optional[pd.DataFrame]: 해외주식 상품기본정보 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        # [필수 파라미터 검증]
+        if not prdt_type_cd:
+            logger.error("prdt_type_cd is required. (e.g. '512')")
+            raise ValueError("prdt_type_cd is required. (e.g. '512')")
+        if not pdno:
+            logger.error("pdno is required. (e.g. 'AAPL')")
+            raise ValueError("pdno is required. (e.g. 'AAPL')")
+
+        tr_id = "CTPF1702R"
+
+        api_url = "/uapi/overseas-price/v1/quotations/search-info"
+
+        params = {
+            "PRDT_TYPE_CD": prdt_type_cd,
+            "PDNO": pdno,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외주식 상품기본정보: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 기본시세 > 해외주식 기간별시세[v1_해외주식-010]
+##############################################################################################
+
+@mcp.tool(
+    name="dailyprice",
+    description="기본시세 > 해외주식 기간별시세",
+)
+async def dailyprice(
+    auth: str,  # 사용자권한정보
+    excd: str,  # 거래소코드
+    symb: str,  # 종목코드
+    gubn: str,  # 일/주/월구분
+    bymd: str,  # 조회기준일자
+    modp: str,  # 수정주가반영여부
+    env_dv: str = "real",  # 실전모의구분
+    tr_cont: str = "",
+    depth: int = 0,
+    max_depth: int = 10
+):
+    """
+    [해외주식] 기본시세
+    해외주식 기간별시세[v1_해외주식-010]
+    해외주식 기간별시세 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        auth (str): 사용자권한정보 (예: "")
+        excd (str): 거래소코드 (예: "NAS")
+        symb (str): 종목코드 (예: "TSLA")
+        gubn (str): 일/주/월구분 (예: "0")
+        bymd (str): 조회기준일자(YYYYMMDD) (예: "20230101")
+        modp (str): 수정주가반영여부 (예: "0")
+        env_dv (str): 실전모의구분 (real:실전, demo:모의)
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임 (output1)
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임 (output2)
+        tr_cont (str): 연속 거래 여부
+        depth (int): 현재 재귀 깊이
+        max_depth (int): 최대 재귀 깊이 (기본값: 10)
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 기간별시세 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        # 필수 파라미터 검증
+        if not excd:
+            logger.error("excd is required. (e.g. 'NAS')")
+            raise ValueError("excd is required. (e.g. 'NAS')")
+        if not symb:
+            logger.error("symb is required. (e.g. 'TSLA')")
+            raise ValueError("symb is required. (e.g. 'TSLA')")
+        if not gubn:
+            logger.error("gubn is required. (e.g. '0')")
+            raise ValueError("gubn is required. (e.g. '0')")
+        if not modp:
+            logger.error("modp is required. (e.g. '0')")
+            raise ValueError("modp is required. (e.g. '0')")
+
+        tr_id = "HHDFS76240000"  # 실전/모의투자 공통 TR ID
+
+        api_url = "/uapi/overseas-price/v1/quotations/dailyprice"
+
+        params = {
+            "AUTH": auth,
+            "EXCD": excd,
+            "SYMB": symb,
+            "GUBN": gubn,
+            "BYMD": bymd,
+            "MODP": modp,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 기본시세 > 해외주식 업종별시세[해외주식-048]
+##############################################################################################
+@mcp.tool(
+    name="industry-theme",
+    description="기본시세 > 해외주식 업종별시세",
+)
+async def industry_theme(
+    excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    icod: str,  # [필수] 업종코드
+    vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+    auth: str = "",  # 사용자권한정보
+    keyb: str = "",  # NEXT KEY BUFF
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    해외주식 업종별시세 API입니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        icod (str): [필수] 업종코드
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        auth (str): 사용자권한정보
+        keyb (str): NEXT KEY BUFF
+        tr_cont (str): 연속거래여부
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'NAS')")
+
+        if icod == "":
+            raise ValueError("icod is required")
+
+        if vol_rang == "":
+            raise ValueError("vol_rang is required (e.g. '0')")
+
+        tr_id = "HHDFS76370000"
+
+        api_url = "/uapi/overseas-price/v1/quotations/industry-theme"
+
+        params = {
+            "EXCD": excd,
+            "ICOD": icod,
+            "VOL_RANG": vol_rang,
+            "AUTH": auth,
+            "KEYB": keyb
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 기본시세 > 해외주식 현재가 1호가[해외주식-033]
+##############################################################################################
+@mcp.tool(
+    name="inquire-asking-price",
+    description="기본시세 > 해외주식 업종별시세",
+)
+async def inquire_asking_price(
+    auth: str,  # 사용자권한정보
+    excd: str,  # 거래소코드
+    symb: str,  # 종목코드
+    tr_cont: str = "",
+    depth: int = 0,
+    max_depth: int = 10
+):
+    """
+    [해외주식] 기본시세
+    해외주식 현재가 1호가[해외주식-033]
+    해외주식 현재가 1호가 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        auth (str): 사용자권한정보
+        excd (str): 거래소코드 (예: NYS, NAS, AMS, 등)
+        symb (str): 종목코드 (예: TSLA)
+        tr_cont (str): 연속 거래 여부
+        depth (int): 현재 재귀 깊이
+        max_depth (int): 최대 재귀 깊이 (기본값: 10)
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: 해외주식 현재가 1호가 데이터
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        # [필수 파라미터 검증]
+        if not excd:
+            logger.error("excd is required. (e.g. 'NAS')")
+            raise ValueError("excd is required. (e.g. 'NAS')")
+        if not symb:
+            logger.error("symb is required. (e.g. 'TSLA')")
+            raise ValueError("symb is required. (e.g. 'TSLA')")
+
+        tr_id = "HHDFS76200100"
+
+        api_url = "/uapi/overseas-price/v1/quotations/inquire-asking-price"
+
+        params = {
+            "AUTH": auth,
+            "EXCD": excd,
+            "SYMB": symb,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 기본시세 > 해외주식 체결추이[해외주식-037]
+##############################################################################################
+@mcp.tool(
+    name="quot-inquire-ccnl",
+    description="기본시세 > 해외주식 체결추이",
+)
+async def quot_inquire_ccnl(
+    excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    tday: str,  # [필수] 당일전일구분 (ex. 0:전일, 1:당일)
+    symb: str,  # [필수] 종목코드 (ex. 해외종목코드)
+    auth: str = "",  # 사용자권한정보
+    keyb: str = "",  # NEXT KEY BUFF
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    해외주식 체결추이 API입니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        tday (str): [필수] 당일전일구분 (ex. 0:전일, 1:당일)
+        symb (str): [필수] 종목코드 (ex. 해외종목코드)
+        auth (str): 사용자권한정보
+        keyb (str): NEXT KEY BUFF
+        tr_cont (str): 연속거래여부
+        dataframe (Optional[pd.DataFrame]): 누적 데이터프레임
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        pd.DataFrame: 해외주식 체결추이 데이터
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'NAS')")
+
+        if tday == "":
+            raise ValueError("tday is required (e.g. '0' or '1')")
+
+        if symb == "":
+            raise ValueError("symb is required (e.g. 'TSLA')")
+
+        tr_id = "HHDFS76200300"
+
+        api_url = "/uapi/overseas-price/v1/quotations/inquire-ccnl"
+
+        params = {
+            "EXCD": excd,
+            "TDAY": tday,
+            "SYMB": symb,
+            "AUTH": auth,
+            "KEYB": keyb
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+##############################################################################################
+# [해외주식] 기본시세 > 해외주식 종목_지수_환율기간별시세(일_주_월_년)[v1_해외주식-012]
+##############################################################################################
+@mcp.tool(
+    name="inquire-daily-chartprice",
+    description="기본시세 > 해외주식 종목_지수_환율기간별시세(일_주_월_년)",
+)
+async def inquire_daily_chartprice(
+        fid_cond_mrkt_div_code: str,  # FID 조건 시장 분류 코드
+        fid_input_iscd: str,  # FID 입력 종목코드
+        fid_input_date_1: str,  # FID 입력 날짜1
+        fid_input_date_2: str,  # FID 입력 날짜2
+        fid_period_div_code: str,  # FID 기간 분류 코드
+        env_dv: str = "real",  # 실전모의구분
+        tr_cont: str = "",
+        depth: int = 0,
+        max_depth: int = 10
+):
+    """
+    [해외주식] 기본시세
+    해외주식 종목_지수_환율기간별시세(일_주_월_년)[v1_해외주식-012]
+    해외주식 종목_지수_환율기간별시세(일_주_월_년) API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        fid_cond_mrkt_div_code (str): N: 해외지수, X 환율, I: 국채, S:금선물
+        fid_input_iscd (str): 종목코드 ※ 해외주식 마스터 코드 참조  (포럼 > FAQ > 종목정보 다운로드(해외) > 해외지수)  ※ 해당 API로 미국주식 조회 시, 다우30, 나스닥100, S&P500 종목만 조회 가능합니다. 더 많은 미국주식 종목 시세를 이용할 시에는, 해외주식기간별시세 API 사용 부탁드립니다.
+        fid_input_date_1 (str): 시작일자(YYYYMMDD)
+        fid_input_date_2 (str): 종료일자(YYYYMMDD)
+        fid_period_div_code (str): D:일, W:주, M:월, Y:년
+        env_dv (str): 실전모의구분 (real:실전, demo:모의)
+        tr_cont (str): 연속 거래 여부
+        depth (int): 현재 재귀 깊이
+        max_depth (int): 최대 재귀 깊이 (기본값: 10)
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 종목_지수_환율기간별시세(일_주_월_년) 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        # [필수 파라미터 검증]
+        if not fid_cond_mrkt_div_code:
+            logger.error("fid_cond_mrkt_div_code is required. (e.g. 'N')")
+            raise ValueError("fid_cond_mrkt_div_code is required. (e.g. 'N')")
+        if not fid_input_iscd:
+            logger.error("fid_input_iscd is required. (e.g. '.DJI')")
+            raise ValueError("fid_input_iscd is required. (e.g. '.DJI')")
+        if not fid_input_date_1:
+            logger.error("fid_input_date_1 is required. (e.g. '20220401')")
+            raise ValueError("fid_input_date_1 is required. (e.g. '20220401')")
+        if not fid_input_date_2:
+            logger.error("fid_input_date_2 is required. (e.g. '20220613')")
+            raise ValueError("fid_input_date_2 is required. (e.g. '20220613')")
+        if not fid_period_div_code:
+            logger.error("fid_period_div_code is required. (e.g. 'D')")
+            raise ValueError("fid_period_div_code is required. (e.g. 'D')")
+
+        tr_id = "FHKST03030100"  # 실전투자용 TR ID
+
+        api_url = "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
+
+        params = {
+            "FID_COND_MRKT_DIV_CODE": fid_cond_mrkt_div_code,
+            "FID_INPUT_ISCD": fid_input_iscd,
+            "FID_INPUT_DATE_1": fid_input_date_1,
+            "FID_INPUT_DATE_2": fid_input_date_2,
+            "FID_PERIOD_DIV_CODE": fid_period_div_code,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 기본시세 > 해외주식 업종별코드조회[해외주식-049]
+##############################################################################################
+@mcp.tool(
+    name="industry-price",
+    description="기본시세 > 해외주식 업종별코드조회",
+)
+async def industry_price(
+    excd: str,  # [필수] 거래소명
+    auth: str = "",  # 사용자권한정보
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    해외주식 업종별코드조회 API입니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        auth (str): 사용자권한정보
+        tr_cont (str): 연속거래여부
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 데이터
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'NYS', 'NAS', 'AMS', 'HKS', 'SHS', 'SZS', 'HSX', 'HNX', 'TSE')")
+
+        tr_id = "HHDFS76370100"
+
+        api_url = "/uapi/overseas-price/v1/quotations/industry-price"
+
+        params = {
+            "EXCD": excd,
+            "AUTH": auth
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 거래량급증[해외주식-039]
+##############################################################################################
+@mcp.tool(
+    name="volume-surge",
+    description="시세분석 > 해외주식 거래량급증",
+)
+async def volume_surge(
+    excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    mixn: str,  # [필수] N분전콤보값 (ex. 0:1분전, 1:2분전, 2:3분전, 3:5분전, 4:10분전, 5:15분전, 6:20분전, 7:30분전, 8:60분전, 9:120분전)
+    vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+    keyb: str = "",  # NEXT KEY BUFF
+    auth: str = "",  # 사용자권한정보
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    [해외주식] 시세분석 > 해외주식 거래량급증[해외주식-039]
+    해외주식 거래량급증 정보를 조회합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        mixn (str): [필수] N분전콤보값 (ex. 0:1분전, 1:2분전, 2:3분전, 3:5분전, 4:10분전, 5:15분전, 6:20분전, 7:30분전, 8:60분전, 9:120분전)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        keyb (str): NEXT KEY BUFF
+        auth (str): 사용자권한정보
+        tr_cont (str): 연속거래여부
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'NYS')")
+
+        if mixn == "":
+            raise ValueError("mixn is required (e.g. '0')")
+
+        if vol_rang == "":
+            raise ValueError("vol_rang is required (e.g. '0')")
+
+        tr_id = "HHDFS76270000"  # 해외주식 거래량급증
+
+        api_url = "/uapi/overseas-stock/v1/ranking/volume-surge"
+
+        params = {
+            "EXCD": excd,  # 거래소명
+            "MIXN": mixn,  # N분전콤보값
+            "VOL_RANG": vol_rang,  # 거래량조건
+            "KEYB": keyb,  # NEXT KEY BUFF
+            "AUTH": auth  # 사용자권한정보
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 매수체결강도상위[해외주식-040]
+##############################################################################################
+@mcp.tool(
+    name="volume-power",
+    description="시세분석 > 해외주식 매수체결강도상위",
+)
+async def volume_power(
+    excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    nday: str,  # [필수] N일자값 (ex. 0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년)
+    vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+    auth: str = "",  # 사용자권한정보
+    keyb: str = "",  # NEXT KEY BUFF
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    [해외주식] 시세분석 > 해외주식 매수체결강도상위[해외주식-040]
+
+    해외주식 매수 체결강도 상위 종목을 조회합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        nday (str): [필수] N일자값 (ex. 0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        auth (str): 사용자권한정보
+        keyb (str): NEXT KEY BUFF
+        tr_cont (str): 연속거래여부
+        dataframe1 (Optional[pd.DataFrame]): output1 누적 데이터프레임
+        dataframe2 (Optional[pd.DataFrame]): output2 누적 데이터프레임
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'HKS')")
+
+        if nday == "":
+            raise ValueError("nday is required (e.g. '0')")
+
+        if vol_rang == "":
+            raise ValueError("vol_rang is required (e.g. '0')")
+
+        tr_id = "HHDFS76280000"
+
+        api_url = "/uapi/overseas-stock/v1/ranking/volume-power"
+
+        params = {
+            "EXCD": excd,
+            "NDAY": nday,
+            "VOL_RANG": vol_rang,
+            "AUTH": auth,
+            "KEYB": keyb
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 상승률/하락률[해외주식-041]
+##############################################################################################
+@mcp.tool(
+    name="updown-rate",
+    description="시세분석 > 해외주식 상승률/하락률",
+)
+async def updown_rate(
+    excd: str,  # [필수] 거래소명
+    nday: str,  # [필수] N일자값
+    gubn: str,  # [필수] 상승율/하락율 구분
+    vol_rang: str,  # [필수] 거래량조건
+    auth: str = "",  # 사용자권한정보
+    keyb: str = "",  # NEXT KEY BUFF
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    해외주식 상승률/하락률 순위를 조회합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        nday (str): [필수] N일자값 (ex. 0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년)
+        gubn (str): [필수] 상승율/하락율 구분 (ex. 0:하락율, 1:상승율)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        auth (str): 사용자권한정보
+        keyb (str): NEXT KEY BUFF
+        tr_cont (str): 연속거래여부
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 상승률/하락률 순위 데이터
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        # 필수 파라미터 검증
+        if excd == "":
+            raise ValueError(
+                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+
+        if nday == "":
+            raise ValueError("nday is required (e.g. '0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년')")
+
+        if gubn == "":
+            raise ValueError("gubn is required (e.g. '0:하락율, 1:상승율')")
+
+        if vol_rang == "":
+            raise ValueError(
+                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+
+        tr_id = "HHDFS76290000"
+
+        api_url = "/uapi/overseas-stock/v1/ranking/updown-rate"
+
+        params = {
+            "EXCD": excd,
+            "NDAY": nday,
+            "GUBN": gubn,
+            "VOL_RANG": vol_rang,
+            "AUTH": auth,
+            "KEYB": keyb
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 거래량순위[해외주식-043]
+##############################################################################################
+@mcp.tool(
+    name="trade-vol",
+    description="시세분석 > 해외주식 거래량순위",
+)
+async def trade_vol(
+    excd: str,  # 거래소명
+    nday: str,  # N분전콤보값
+    vol_rang: str,  # 거래량조건
+    keyb: str = "",  # NEXT KEY BUFF
+    auth: str = "",  # 사용자권한정보
+    prc1: str = "",  # 가격 필터 시작
+    prc2: str = "",  # 가격 필터 종료
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    [해외주식] 시세분석 > 해외주식 거래량순위[해외주식-043]
+    해외주식 거래량순위 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        nday (str): [필수] N분전콤보값 (ex. 0:당일, 1:2일전, 2:3일전, 3:5일전, 4:10일전, 5:20일전, 6:30일전, 7:60일전, 8:120일전, 9:1년전)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        keyb (str): NEXT KEY BUFF (ex. "")
+        auth (str): 사용자권한정보 (ex. "")
+        prc1 (str): 가격 필터 시작 (ex. "")
+        prc2 (str): 가격 필터 종료 (ex. "")
+        tr_cont (str): 연속거래여부 (ex. "")
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 거래량순위 데이터 (output1, output2)
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        # 필수 파라미터 검증
+        if excd == "":
+            raise ValueError(
+                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+
+        if nday == "":
+            raise ValueError(
+                "nday is required (e.g. '0:당일, 1:2일전, 2:3일전, 3:5일전, 4:10일전, 5:20일전, 6:30일전, 7:60일전, 8:120일전, 9:1년전')")
+
+        if vol_rang == "":
+            raise ValueError(
+                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+
+        tr_id = "HHDFS76310010"  # 해외주식 거래량순위
+
+        api_url = "/uapi/overseas-stock/v1/ranking/trade-vol"
+
+        params = {
+            "EXCD": excd,
+            "NDAY": nday,
+            "VOL_RANG": vol_rang,
+            "KEYB": keyb,
+            "AUTH": auth,
+            "PRC1": prc1,
+            "PRC2": prc2
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 거래회전율순위[해외주식-046]
+##############################################################################################
+@mcp.tool(
+    name="trade-turnover",
+    description="시세분석 > 해외주식 거래회전율순위",
+)
+async def trade_turnover(
+    excd: str,  # 거래소명
+    nday: str,  # N분전콤보값
+    vol_rang: str,  # 거래량조건
+    keyb: str = "",  # NEXT KEY BUFF
+    auth: str = "",  # 사용자권한정보
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀 깊이 (자동 관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    [해외주식] 시세분석 > 해외주식 거래회전율순위[해외주식-046]
+    해외주식 거래회전율순위 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        nday (str): [필수] N분전콤보값 (ex. 0:당일, 1:2일전, 2:3일전, 3:5일전, 4:10일전, 5:20일전, 6:30일전, 7:60일전, 8:120일전, 9:1년전)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        keyb (str): NEXT KEY BUFF
+        auth (str): 사용자권한정보
+        tr_cont (str): 연속거래여부
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 해외주식 거래회전율순위 데이터
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        # 필수 파라미터 검증
+        if excd == "":
+            raise ValueError(
+                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+
+        if nday == "":
+            raise ValueError(
+                "nday is required (e.g. '0:당일, 1:2일전, 2:3일전, 3:5일전, 4:10일전, 5:20일전, 6:30일전, 7:60일전, 8:120일전, 9:1년전')")
+
+        if vol_rang == "":
+            raise ValueError(
+                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+
+        tr_id = "HHDFS76340000"  # 해외주식 거래회전율순위
+
+        api_url = "/uapi/overseas-stock/v1/ranking/trade-turnover"
+
+        params = {
+            "EXCD": excd,  # 거래소명
+            "NDAY": nday,  # N분전콤보값
+            "VOL_RANG": vol_rang,  # 거래량조건
+            "KEYB": keyb,  # NEXT KEY BUFF
+            "AUTH": auth  # 사용자권한정보
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 거래대금순위[해외주식-044]
+##############################################################################################
+@mcp.tool(
+    name="trade-pbmn",
+    description="시세분석 > 해외주식 거래대금순위",
+)
+async def trade_pbmn(
+    excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    nday: str,  # [필수] N일자값 (ex. 0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년)
+    vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+    auth: str = "",  # 사용자권한정보
+    keyb: str = "",  # NEXT KEY BUFF
+    prc1: str = "",  # 현재가 필터범위 시작
+    prc2: str = "",  # 현재가 필터범위 끝
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    해외주식 거래대금순위 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        nday (str): [필수] N일자값 (ex. 0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        auth (str): 사용자권한정보
+        keyb (str): NEXT KEY BUFF
+        prc1 (str): 현재가 필터범위 시작
+        prc2 (str): 현재가 필터범위 끝
+        tr_cont (str): 연속거래여부
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 거래대금순위 데이터 (output1, output2)
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        if excd == "":
+            raise ValueError(
+                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+
+        if nday == "":
+            raise ValueError("nday is required (e.g. '0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년')")
+
+        if vol_rang == "":
+            raise ValueError(
+                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+
+        tr_id = "HHDFS76320010"  # 해외주식 거래대금순위
+
+        api_url = "/uapi/overseas-stock/v1/ranking/trade-pbmn"
+
+        params = {
+            "EXCD": excd,  # 거래소명
+            "NDAY": nday,  # N일자값
+            "VOL_RANG": vol_rang,  # 거래량조건
+            "AUTH": auth,  # 사용자권한정보
+            "KEYB": keyb,  # NEXT KEY BUFF
+            "PRC1": prc1,  # 현재가 필터범위 시작
+            "PRC2": prc2,  # 현재가 필터범위 끝
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 거래증가율순위[해외주식-045]
+##############################################################################################
+@mcp.tool(
+    name="rade-growth",
+    description="시세분석 > 해외주식 거래증가율순위",
+)
+async def trade_growth(
+    excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    nday: str,  # [필수] N일자값 (ex. 0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년)
+    vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+    auth: str = "",  # 사용자권한정보
+    keyb: str = "",  # NEXT KEY BUFF
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    [해외주식] 기본시세 > 해외주식 거래증가율순위[해외주식-045]
+    해외주식 거래증가율순위 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        nday (str): [필수] N일자값 (ex. 0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        auth (str): 사용자권한정보
+        keyb (str): NEXT KEY BUFF
+        tr_cont (str): 연속거래여부
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 데이터프레임 튜플
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'NYS')")
+
+        if nday == "":
+            raise ValueError("nday is required (e.g. '0')")
+
+        if vol_rang == "":
+            raise ValueError("vol_rang is required (e.g. '0')")
+
+        tr_id = "HHDFS76330000"  # 해외주식 거래증가율순위
+
+        api_url = "/uapi/overseas-stock/v1/ranking/trade-growth"
+
+        params = {
+            "EXCD": excd,
+            "NDAY": nday,
+            "VOL_RANG": vol_rang,
+            "AUTH": auth,
+            "KEYB": keyb
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 가격급등락[해외주식-038]
+##############################################################################################
+@mcp.tool(
+    name="price-fluct",
+    description="시세분석 > 해외주식 가격급등락",
+)
+async def price_fluct(
+    excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    gubn: str,  # [필수] 급등/급락구분 (ex. 0:급락, 1:급등)
+    mixn: str,  # [필수] N분전콤보값 (ex. 0:1분전, 1:2분전, 2:3분전, 3:5분전, 4:10분전, 5:15분전, 6:20분전, 7:30분전, 8:60분전, 9:120분전)
+    vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+    keyb: str = "",  # NEXT KEY BUFF
+    auth: str = "",  # 사용자권한정보
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    [해외주식] 시세분석 > 해외주식 가격급등락[해외주식-038]
+    해외주식 가격급등락 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        gubn (str): [필수] 급등/급락구분 (ex. 0:급락, 1:급등)
+        mixn (str): [필수] N분전콤보값 (ex. 0:1분전, 1:2분전, 2:3분전, 3:5분전, 4:10분전, 5:15분전, 6:20분전, 7:30분전, 8:60분전, 9:120분전)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        keyb (str): NEXT KEY BUFF
+        auth (str): 사용자권한정보
+        tr_cont (str): 연속거래여부
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 가격급등락 데이터 (output1, output2)
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'NAS')")
+
+        if gubn == "":
+            raise ValueError("gubn is required (e.g. '0' or '1')")
+
+        if mixn == "":
+            raise ValueError("mixn is required (e.g. '0')")
+
+        if vol_rang == "":
+            raise ValueError("vol_rang is required (e.g. '0')")
+
+        tr_id = "HHDFS76260000"  # 해외주식 가격급등락
+
+        api_url = "/uapi/overseas-stock/v1/ranking/price-fluct"
+
+        params = {
+            "EXCD": excd,
+            "GUBN": gubn,
+            "MIXN": mixn,
+            "VOL_RANG": vol_rang,
+            "KEYB": keyb,
+            "AUTH": auth
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 신고/신저가[해외주식-042]
+##############################################################################################
+@mcp.tool(
+    name="new-highlow",
+    description="시세분석 > 해외주식 신고/신저가",
+)
+async def new_highlow(
+    excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+    mixn: str,  # [필수] N분전콤보값 (ex. 0:1분전, 1:2분전, 2:3분전, 3:5분전, 4:10분전, 5:15분전, 6:20분전, 7:30분전, 8:60분전, 9:120분전)
+    vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+    gubn: str,  # [필수] 신고/신저 구분 (ex. 0:신저,1:신고)
+    gubn2: str,  # [필수] 일시돌파/돌파 구분 (ex. 0:일시돌파0, 1:돌파유지1)
+    keyb: str = "",  # NEXT KEY BUFF
+    auth: str = "",  # 사용자권한정보
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    [해외주식] 시세분석 > 해외주식 신고/신저가[해외주식-042]
+    해외주식 신고/신저가 정보를 조회하여 DataFrame으로 반환합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        mixn (str): [필수] N분전콤보값 (ex. 0:1분전, 1:2분전, 2:3분전, 3:5분전, 4:10분전, 5:15분전, 6:20분전, 7:30분전, 8:60분전, 9:120분전)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        gubn (str): [필수] 신고/신저 구분 (ex. 0:신저,1:신고)
+        gubn2 (str): [필수] 일시돌파/돌파 구분 (ex. 0:일시돌파0, 1:돌파유지1)
+        keyb (str): NEXT KEY BUFF
+        auth (str): 사용자권한정보
+        tr_cont (str): 연속거래여부
+        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임 output1
+        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임 output2
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        if excd == "":
+            raise ValueError("excd is required (e.g. 'NYS')")
+
+        if mixn == "":
+            raise ValueError("mixn is required (e.g. '0')")
+
+        if vol_rang == "":
+            raise ValueError("vol_rang is required (e.g. '0')")
+
+        if gubn == "":
+            raise ValueError("gubn is required (e.g. '1')")
+
+        if gubn2 == "":
+            raise ValueError("gubn2 is required (e.g. '1')")
+
+        tr_id = "HHDFS76300000"  # 해외주식 신고/신저가
+
+        api_url = "/uapi/overseas-stock/v1/ranking/new-highlow"
+
+        params = {
+            "EXCD": excd,
+            "MIXN": mixn,
+            "VOL_RANG": vol_rang,
+            "GUBN": gubn,
+            "GUBN2": gubn2,
+            "KEYB": keyb,
+            "AUTH": auth
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+##############################################################################################
+# [해외주식] 시세분석 > 해외주식 시가총액순위[해외주식-047]
+##############################################################################################
+@mcp.tool(
+    name="market-cap",
+    description="시세분석 > 해외주식 시가총액순위",
+)
+async def market_cap(
+    excd: str,  # 거래소명
+    vol_rang: str,  # 거래량조건
+    keyb: str = "",  # NEXT KEY BUFF
+    auth: str = "",  # 사용자권한정보
+    tr_cont: str = "",  # 연속거래여부
+    depth: int = 0,  # 내부 재귀깊이 (자동관리)
+    max_depth: int = 10  # 최대 재귀 횟수 제한
+):
+    """
+    해외주식 시가총액순위 조회 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
+        vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
+        keyb (str): NEXT KEY BUFF (ex. "")
+        auth (str): 사용자권한정보 (ex. "")
+        tr_cont (str): 연속거래여부 (ex. "")
+        depth (int): 내부 재귀깊이 (자동관리)
+        max_depth (int): 최대 재귀 횟수 제한
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: 시가총액순위 데이터 (output1, output2)
+    """
+
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        if excd == "":
+            raise ValueError(
+                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+
+        if vol_rang == "":
+            raise ValueError(
+                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+
+        tr_id = "HHDFS76350100"  # 해외주식 시가총액순위
+
+        api_url = "/uapi/overseas-stock/v1/ranking/market-cap"
+
+        params = {
+            "EXCD": excd,  # 거래소명
+            "VOL_RANG": vol_rang,  # 거래량조건
+            "KEYB": keyb,  # NEXT KEY BUFF
+            "AUTH": auth,  # 사용자권한정보
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get: {response.text}")
+
+        return response.json()
+
+
+
 
 if __name__ == "__main__":
     logger.info("Starting MCP server...")
