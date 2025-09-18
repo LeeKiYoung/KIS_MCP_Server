@@ -9,3 +9,8 @@ token.json
 
 # OS
 .DS_Store
+
+# AI
+.claude
+CLAUDE.md
+.mcp.json
