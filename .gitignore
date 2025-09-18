@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 .venv/
+*.egg-info
+.idea
 
 # Environment and sensitive files
 .env

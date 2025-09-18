@@ -238,24 +238,69 @@ async def get_hashkey(client: httpx.AsyncClient, token: str, body: dict) -> str:
 
 
 @mcp.tool(
-    name="price",
-    description="기본시세 > 해외주식 현재체결가",
+    name="period_rights",
+    description="시세분석 > 해외주식 기간별권리조회",
 )
-async def price(symbol: str, market: str):
+async def period_rights(
+    rght_type_cd: str,  # 권리유형코드
+    inqr_dvsn_cd: str,  # 조회구분코드
+    inqr_strt_dt: str,  # 조회시작일자
+    inqr_end_dt: str,  # 조회종료일자
+    pdno: str = "",  # 상품번호
+    prdt_type_cd: str = "",  # 상품유형코드
+    NK50: str = "",  # 연속조회키50
+    FK50: str = "",  # 연속조회검색조건50
+):
     """
-    Get overseas stock price
-    
+    해외주식 기간별권리조회 API입니다.
+    한국투자 HTS(eFriend Plus) > [7520] 기간별해외증권권리조회 화면을 API로 개발한 사항으로, 해당 화면을 참고하시면 기능을 이해하기 쉽습니다.
+
+    ※ 확정여부가 '예정'으로 표시되는 경우는 권리정보가 변경될 수 있으니 참고자료로만 활용하시기 바랍니다.
+
     Args:
-        symbol: Stock symbol (e.g. "AAPL")
-        market: Market code ("NASD" for NASDAQ, "NYSE" for NYSE, etc.)
-        
+        rght_type_cd (str): [필수] 권리유형코드 (%%:전체, 01:유상, 02:무상, 03:배당, 11:합병,14:액면분할, 15:액면병합, 17:감자, 54:WR청구,61:원리금상환, 71:WR소멸, 74:배당옵션, 75:특별배당, 76:ISINCODE변경, 77:실권주청약)
+        inqr_dvsn_cd (str): [필수] 조회구분코드 (02:현지기준일, 03:청약시작일, 04:청약종료일)
+        inqr_strt_dt (str): [필수] 조회시작일자 (20250101)
+        inqr_end_dt (str): [필수] 조회종료일자 (20250131)
+        pdno (str): 상품번호
+        prdt_type_cd (str): 상품유형코드
+        NK50 (str): 연속조회키50
+        FK50 (str): 연속조회검색조건50
+
     Returns:
-        Dictionary containing stock price information
+        pd.DataFrame: 해외주식 기간별권리조회 데이터
     """
+
     async with httpx.AsyncClient() as client:
         token = await get_access_token(client)
+        # 필수 파라미터 검증
+        if rght_type_cd == "":
+            raise ValueError(
+                "rght_type_cd is required (e.g. '%%:전체, 01:유상, 02:무상, 03:배당, 11:합병,14:액면분할, 15:액면병합, 17:감자, 54:WR청구,61:원리금상환, 71:WR소멸, 74:배당옵션, 75:특별배당, 76:ISINCODE변경, 77:실권주청약')")
 
-        api_url = "/uapi/overseas-price/v1/quotations/price"
+        if inqr_dvsn_cd == "":
+            raise ValueError("inqr_dvsn_cd is required (e.g. '02:현지기준일, 03:청약시작일, 04:청약종료일')")
+
+        if inqr_strt_dt == "":
+            raise ValueError("inqr_strt_dt is required (e.g. '20250101')")
+
+        if inqr_end_dt == "":
+            raise ValueError("inqr_end_dt is required (e.g. '20250131')")
+
+        tr_id = "CTRGT011R"  # 해외주식 기간별권리조회
+
+        api_url = "/uapi/overseas-price/v1/quotations/period-rights"
+
+        params = {
+            "RGHT_TYPE_CD": rght_type_cd,  # 권리유형코드
+            "INQR_DVSN_CD": inqr_dvsn_cd,  # 조회구분코드
+            "INQR_STRT_DT": inqr_strt_dt,  # 조회시작일자
+            "INQR_END_DT": inqr_end_dt,  # 조회종료일자
+            "PDNO": pdno,  # 상품번호
+            "PRDT_TYPE_CD": prdt_type_cd,  # 상품유형코드
+            "CTX_AREA_NK50": NK50,  # 연속조회키50
+            "CTX_AREA_FK50": FK50  # 연속조회검색조건50
+        }
 
         response = await client.get(
             f"{TrIdManager.get_domain('buy')}{api_url}",
@@ -264,14 +309,76 @@ async def price(symbol: str, market: str):
                 "authorization": f"{AUTH_TYPE} {token}",
                 "appkey": os.environ["KIS_APP_KEY"],
                 "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": "HHDFS00000300"
+                "tr_id": tr_id,
             },
-            params={
-                "AUTH": "",
-                "EXCD": market,
-                "SYMB": symbol
-            }
+            params=params,
         )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외속보(제목): {response.text}")
+
+        return response.json()
+
+@mcp.tool(
+    name="price",
+    description="기본시세 > 해외주식 현재체결가",
+)
+async def price(
+    auth: str,  # 사용자권한정보
+    excd: str,  # 거래소코드
+    symb: str,  # 종목코드
+):
+    """
+    [해외주식] 기본시세
+    해외주식 현재체결가[v1_해외주식-009]
+    해외주식 현재체결가 API를 호출하여 DataFrame으로 반환합니다.
+
+    Args:
+        auth (str): 사용자권한정보
+        excd (str): 거래소코드 (예: "NAS")
+        symb (str): 종목코드 (예: "AAPL")
+
+    Returns:
+        Optional[pd.DataFrame]: 해외주식 현재체결가 데이터
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+
+        # 필수 파라미터 검증
+        if not excd:
+            logger.error("excd is required. (e.g. 'NAS')")
+            raise ValueError("excd is required. (e.g. 'NAS')")
+
+        if not symb:
+            logger.error("symb is required. (e.g. 'AAPL')")
+            raise ValueError("symb is required. (e.g. 'AAPL')")
+
+        tr_id = "HHDFS00000300"
+
+        api_url = "/uapi/overseas-price/v1/quotations/price"
+
+        params = {
+            "AUTH": auth,
+            "EXCD": excd,
+            "SYMB": symb,
+        }
+
+        response = await client.get(
+            f"{TrIdManager.get_domain('buy')}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get 해외속보(제목): {response.text}")
+
+        return response.json()
         
         if response.status_code != 200:
             raise Exception(f"Failed to get overseas stock price: {response.text}")
@@ -367,9 +474,6 @@ async def inquire_ccnl(
     symb: str,         # [필수] 종목코드 (ex. 해외종목코드)
     auth: str = "",    # 사용자권한정보
     keyb: str = "",    # NEXT KEY BUFF
-    tr_cont: str = "", # 연속거래여부
-    depth: int = 0,         # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10     # 최대 재귀 횟수 제한
 ):
     """
     해외주식 체결추이 API입니다.
@@ -380,9 +484,6 @@ async def inquire_ccnl(
         symb (str): [필수] 종목코드 (ex. 해외종목코드)
         auth (str): 사용자권한정보
         keyb (str): NEXT KEY BUFF
-        tr_cont (str): 연속거래여부
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         pd.DataFrame: 해외주식 체결추이 데이터
@@ -437,9 +538,6 @@ async def price_detail(
     auth: str,  # 사용자권한정보
     excd: str,  # 거래소명
     symb: str,  # 종목코드
-    tr_cont: str = "",
-    depth: int = 0,
-    max_depth: int = 10
 ):
     """
     [해외주식] 기본시세
@@ -450,9 +548,6 @@ async def price_detail(
         auth (str): 사용자권한정보
         excd (str): 거래소명 (예: HKS, NYS, NAS, AMS, TSE, SHS, SZS, SHI, SZI, HSX, HNX, BAY, BAQ, BAA)
         symb (str): 종목코드
-        tr_cont (str): 연속 거래 여부
-        depth (int): 현재 재귀 깊이
-        max_depth (int): 최대 재귀 깊이 (기본값: 10)
 
     Returns:
         Optional[pd.DataFrame]: 해외주식 현재가상세 데이터
@@ -509,9 +604,6 @@ async def news_title(
     data_dt: str = "",  # [필수] 조회일자
     data_tm: str = "",  # [필수] 조회시간
     cts: str = "",  # [필수] 다음키
-    tr_cont: str = "",  # [필수] 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     해외뉴스종합(제목) API입니다.
@@ -526,9 +618,6 @@ async def news_title(
         data_dt (str): [필수] 조회일자
         data_tm (str): [필수] 조회시간
         cts (str): [필수] 다음키
-        tr_cont (str): [필수] 연속거래여부
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         pd.DataFrame: 해외뉴스종합(제목) 데이터
@@ -583,9 +672,6 @@ async def inquire_time_itemchartprice(
     nrec: str,  # 요청갯수
     fill: str,  # 미체결채움구분
     keyb: str,  # NEXT KEY BUFF
-    tr_cont: str = "",
-    depth: int = 0,
-    max_depth: int = 10
 ):
     """
     [해외주식] 기본시세
@@ -602,11 +688,6 @@ async def inquire_time_itemchartprice(
         nrec (str): 레코드요청갯수 (최대 120)
         fill (str): "" 공백으로 입력
         keyb (str): 처음 조회 시, "" 공백 입력 다음 조회 시, 이전 조회 결과의 마지막 분봉 데이터를 이용하여, 1분 전 혹은 n분 전의 시간을 입력  (형식: YYYYMMDDHHMMSS, ex. 20241014140100)
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임 (output1)
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임 (output2)
-        tr_cont (str): 연속 거래 여부
-        depth (int): 현재 재귀 깊이
-        max_depth (int): 최대 재귀 깊이 (기본값: 10)
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식분봉조회 데이터
@@ -674,9 +755,6 @@ async def inquire_time_indexchartprice(
     fid_input_iscd: str,  # 입력 종목코드
     fid_hour_cls_code: str,  # 시간 구분 코드
     fid_pw_data_incu_yn: str,  # 과거 데이터 포함 여부
-    tr_cont: str = "",
-    depth: int = 0,
-    max_depth: int = 10
 ):
     """
     [해외주식] 기본시세
@@ -688,9 +766,6 @@ async def inquire_time_indexchartprice(
         fid_input_iscd (str): 종목번호(ex. TSLA)
         fid_hour_cls_code (str): 0: 정규장, 1: 시간외
         fid_pw_data_incu_yn (str): Y/N
-        tr_cont (str): 연속 거래 여부
-        depth (int): 현재 재귀 깊이
-        max_depth (int): 최대 재귀 깊이 (기본값: 10)
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외지수분봉조회 데이터
@@ -773,9 +848,6 @@ async def inquire_search(
     co_st_per: str,  # PER시작
     co_en_per: str,  # PER끝
     keyb: str,  # NEXT KEY BUFF
-    tr_cont: str = "",
-    depth: int = 0,
-    max_depth: int = 10
 ):
     """
     [해외주식] 기본시세
@@ -810,9 +882,6 @@ async def inquire_search(
         co_st_per (str):
         co_en_per (str):
         keyb (str): "" 공백 입력
-        tr_cont (str): 연속 거래 여부
-        depth (int): 현재 재귀 깊이
-        max_depth (int): 최대 재귀 깊이 (기본값: 10)
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식조건검색 데이터
@@ -884,9 +953,6 @@ async def inquire_search(
 async def search_info(
     prdt_type_cd: str,  # 상품유형코드
     pdno: str,  # 상품번호
-    tr_cont: str = "",
-    depth: int = 0,
-    max_depth: int = 10
 ):
     """
     [해외주식] 기본시세
@@ -896,9 +962,6 @@ async def search_info(
     Args:
         prdt_type_cd (str): 512  미국 나스닥 / 513  미국 뉴욕 / 529  미국 아멕스  515  일본 501  홍콩 / 543  홍콩CNY / 558  홍콩USD 507  베트남 하노이 / 508  베트남 호치민 551  중국 상해A / 552  중국 심천A
         pdno (str): 예) AAPL (애플)
-        tr_cont (str): 연속 거래 여부
-        depth (int): 현재 재귀 깊이
-        max_depth (int): 최대 재귀 깊이 (기본값: 10)
 
     Returns:
         Optional[pd.DataFrame]: 해외주식 상품기본정보 데이터
@@ -956,10 +1019,6 @@ async def dailyprice(
     gubn: str,  # 일/주/월구분
     bymd: str,  # 조회기준일자
     modp: str,  # 수정주가반영여부
-    env_dv: str = "real",  # 실전모의구분
-    tr_cont: str = "",
-    depth: int = 0,
-    max_depth: int = 10
 ):
     """
     [해외주식] 기본시세
@@ -973,12 +1032,6 @@ async def dailyprice(
         gubn (str): 일/주/월구분 (예: "0")
         bymd (str): 조회기준일자(YYYYMMDD) (예: "20230101")
         modp (str): 수정주가반영여부 (예: "0")
-        env_dv (str): 실전모의구분 (real:실전, demo:모의)
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임 (output1)
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임 (output2)
-        tr_cont (str): 연속 거래 여부
-        depth (int): 현재 재귀 깊이
-        max_depth (int): 최대 재귀 깊이 (기본값: 10)
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 기간별시세 데이터
@@ -1044,9 +1097,6 @@ async def industry_theme(
     vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
     auth: str = "",  # 사용자권한정보
     keyb: str = "",  # NEXT KEY BUFF
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     해외주식 업종별시세 API입니다.
@@ -1057,11 +1107,6 @@ async def industry_theme(
         vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
         auth (str): 사용자권한정보
         keyb (str): NEXT KEY BUFF
-        tr_cont (str): 연속거래여부
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
@@ -1120,9 +1165,6 @@ async def inquire_asking_price(
     auth: str,  # 사용자권한정보
     excd: str,  # 거래소코드
     symb: str,  # 종목코드
-    tr_cont: str = "",
-    depth: int = 0,
-    max_depth: int = 10
 ):
     """
     [해외주식] 기본시세
@@ -1133,9 +1175,6 @@ async def inquire_asking_price(
         auth (str): 사용자권한정보
         excd (str): 거래소코드 (예: NYS, NAS, AMS, 등)
         symb (str): 종목코드 (예: TSLA)
-        tr_cont (str): 연속 거래 여부
-        depth (int): 현재 재귀 깊이
-        max_depth (int): 최대 재귀 깊이 (기본값: 10)
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: 해외주식 현재가 1호가 데이터
@@ -1192,9 +1231,6 @@ async def quot_inquire_ccnl(
     symb: str,  # [필수] 종목코드 (ex. 해외종목코드)
     auth: str = "",  # 사용자권한정보
     keyb: str = "",  # NEXT KEY BUFF
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     해외주식 체결추이 API입니다.
@@ -1205,10 +1241,6 @@ async def quot_inquire_ccnl(
         symb (str): [필수] 종목코드 (ex. 해외종목코드)
         auth (str): 사용자권한정보
         keyb (str): NEXT KEY BUFF
-        tr_cont (str): 연속거래여부
-        dataframe (Optional[pd.DataFrame]): 누적 데이터프레임
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         pd.DataFrame: 해외주식 체결추이 데이터
@@ -1268,10 +1300,6 @@ async def inquire_daily_chartprice(
         fid_input_date_1: str,  # FID 입력 날짜1
         fid_input_date_2: str,  # FID 입력 날짜2
         fid_period_div_code: str,  # FID 기간 분류 코드
-        env_dv: str = "real",  # 실전모의구분
-        tr_cont: str = "",
-        depth: int = 0,
-        max_depth: int = 10
 ):
     """
     [해외주식] 기본시세
@@ -1284,10 +1312,6 @@ async def inquire_daily_chartprice(
         fid_input_date_1 (str): 시작일자(YYYYMMDD)
         fid_input_date_2 (str): 종료일자(YYYYMMDD)
         fid_period_div_code (str): D:일, W:주, M:월, Y:년
-        env_dv (str): 실전모의구분 (real:실전, demo:모의)
-        tr_cont (str): 연속 거래 여부
-        depth (int): 현재 재귀 깊이
-        max_depth (int): 최대 재귀 깊이 (기본값: 10)
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 종목_지수_환율기간별시세(일_주_월_년) 데이터
@@ -1351,9 +1375,6 @@ async def inquire_daily_chartprice(
 async def industry_price(
     excd: str,  # [필수] 거래소명
     auth: str = "",  # 사용자권한정보
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     해외주식 업종별코드조회 API입니다.
@@ -1361,11 +1382,6 @@ async def industry_price(
     Args:
         excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
         auth (str): 사용자권한정보
-        tr_cont (str): 연속거래여부
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 데이터
@@ -1416,9 +1432,6 @@ async def volume_surge(
     vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
     keyb: str = "",  # NEXT KEY BUFF
     auth: str = "",  # 사용자권한정보
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     [해외주식] 시세분석 > 해외주식 거래량급증[해외주식-039]
@@ -1430,11 +1443,6 @@ async def volume_surge(
         vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
         keyb (str): NEXT KEY BUFF
         auth (str): 사용자권한정보
-        tr_cont (str): 연속거래여부
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
@@ -1494,9 +1502,6 @@ async def volume_power(
     vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
     auth: str = "",  # 사용자권한정보
     keyb: str = "",  # NEXT KEY BUFF
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     [해외주식] 시세분석 > 해외주식 매수체결강도상위[해외주식-040]
@@ -1509,11 +1514,6 @@ async def volume_power(
         vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
         auth (str): 사용자권한정보
         keyb (str): NEXT KEY BUFF
-        tr_cont (str): 연속거래여부
-        dataframe1 (Optional[pd.DataFrame]): output1 누적 데이터프레임
-        dataframe2 (Optional[pd.DataFrame]): output2 누적 데이터프레임
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
@@ -1574,9 +1574,6 @@ async def updown_rate(
     vol_rang: str,  # [필수] 거래량조건
     auth: str = "",  # 사용자권한정보
     keyb: str = "",  # NEXT KEY BUFF
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     해외주식 상승률/하락률 순위를 조회합니다.
@@ -1588,11 +1585,6 @@ async def updown_rate(
         vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
         auth (str): 사용자권한정보
         keyb (str): NEXT KEY BUFF
-        tr_cont (str): 연속거래여부
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 상승률/하락률 순위 데이터
@@ -1661,9 +1653,6 @@ async def trade_vol(
     auth: str = "",  # 사용자권한정보
     prc1: str = "",  # 가격 필터 시작
     prc2: str = "",  # 가격 필터 종료
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     [해외주식] 시세분석 > 해외주식 거래량순위[해외주식-043]
@@ -1677,11 +1666,6 @@ async def trade_vol(
         auth (str): 사용자권한정보 (ex. "")
         prc1 (str): 가격 필터 시작 (ex. "")
         prc2 (str): 가격 필터 종료 (ex. "")
-        tr_cont (str): 연속거래여부 (ex. "")
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 거래량순위 데이터 (output1, output2)
@@ -1747,9 +1731,6 @@ async def trade_turnover(
     vol_rang: str,  # 거래량조건
     keyb: str = "",  # NEXT KEY BUFF
     auth: str = "",  # 사용자권한정보
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀 깊이 (자동 관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     [해외주식] 시세분석 > 해외주식 거래회전율순위[해외주식-046]
@@ -1761,9 +1742,6 @@ async def trade_turnover(
         vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
         keyb (str): NEXT KEY BUFF
         auth (str): 사용자권한정보
-        tr_cont (str): 연속거래여부
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 해외주식 거래회전율순위 데이터
@@ -1829,9 +1807,6 @@ async def trade_pbmn(
     keyb: str = "",  # NEXT KEY BUFF
     prc1: str = "",  # 현재가 필터범위 시작
     prc2: str = "",  # 현재가 필터범위 끝
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     해외주식 거래대금순위 API를 호출하여 DataFrame으로 반환합니다.
@@ -1844,11 +1819,6 @@ async def trade_pbmn(
         keyb (str): NEXT KEY BUFF
         prc1 (str): 현재가 필터범위 시작
         prc2 (str): 현재가 필터범위 끝
-        tr_cont (str): 연속거래여부
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임1
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임2
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 거래대금순위 데이터 (output1, output2)
@@ -1912,9 +1882,6 @@ async def trade_growth(
     vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
     auth: str = "",  # 사용자권한정보
     keyb: str = "",  # NEXT KEY BUFF
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     [해외주식] 기본시세 > 해외주식 거래증가율순위[해외주식-045]
@@ -1926,9 +1893,6 @@ async def trade_growth(
         vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
         auth (str): 사용자권한정보
         keyb (str): NEXT KEY BUFF
-        tr_cont (str): 연속거래여부
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 데이터프레임 튜플
@@ -1989,9 +1953,6 @@ async def price_fluct(
     vol_rang: str,  # [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
     keyb: str = "",  # NEXT KEY BUFF
     auth: str = "",  # 사용자권한정보
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     [해외주식] 시세분석 > 해외주식 가격급등락[해외주식-038]
@@ -2004,9 +1965,6 @@ async def price_fluct(
         vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
         keyb (str): NEXT KEY BUFF
         auth (str): 사용자권한정보
-        tr_cont (str): 연속거래여부
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 가격급등락 데이터 (output1, output2)
@@ -2072,9 +2030,6 @@ async def new_highlow(
     gubn2: str,  # [필수] 일시돌파/돌파 구분 (ex. 0:일시돌파0, 1:돌파유지1)
     keyb: str = "",  # NEXT KEY BUFF
     auth: str = "",  # 사용자권한정보
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     [해외주식] 시세분석 > 해외주식 신고/신저가[해외주식-042]
@@ -2088,11 +2043,6 @@ async def new_highlow(
         gubn2 (str): [필수] 일시돌파/돌파 구분 (ex. 0:일시돌파0, 1:돌파유지1)
         keyb (str): NEXT KEY BUFF
         auth (str): 사용자권한정보
-        tr_cont (str): 연속거래여부
-        dataframe1 (Optional[pd.DataFrame]): 누적 데이터프레임 output1
-        dataframe2 (Optional[pd.DataFrame]): 누적 데이터프레임 output2
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
@@ -2159,9 +2109,6 @@ async def market_cap(
     vol_rang: str,  # 거래량조건
     keyb: str = "",  # NEXT KEY BUFF
     auth: str = "",  # 사용자권한정보
-    tr_cont: str = "",  # 연속거래여부
-    depth: int = 0,  # 내부 재귀깊이 (자동관리)
-    max_depth: int = 10  # 최대 재귀 횟수 제한
 ):
     """
     해외주식 시가총액순위 조회 API를 호출하여 DataFrame으로 반환합니다.
@@ -2171,9 +2118,6 @@ async def market_cap(
         vol_rang (str): [필수] 거래량조건 (ex. 0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상)
         keyb (str): NEXT KEY BUFF (ex. "")
         auth (str): 사용자권한정보 (ex. "")
-        tr_cont (str): 연속거래여부 (ex. "")
-        depth (int): 내부 재귀깊이 (자동관리)
-        max_depth (int): 최대 재귀 횟수 제한
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 시가총액순위 데이터 (output1, output2)
