@@ -208,6 +208,47 @@ async def get_access_token(client: httpx.AsyncClient) -> str:
     
     return token
 
+async def make_api_request(
+    api_url: str,
+    tr_id: str,
+    params: dict,
+    operation: str = "buy"
+) -> dict:
+    """
+    Helper function to make API requests with common HTTP client pattern.
+    
+    Args:
+        api_url (str): API endpoint URL path
+        tr_id (str): Transaction ID for the request
+        params (dict): Request parameters
+        operation (str): Operation type for domain selection (default: "buy")
+        
+    Returns:
+        dict: JSON response from the API
+        
+    Raises:
+        Exception: If the API request fails or returns non-200 status code
+    """
+    async with httpx.AsyncClient() as client:
+        token = await get_access_token(client)
+        
+        response = await client.get(
+            f"{TrIdManager.get_domain(operation)}{api_url}",
+            headers={
+                "content-type": CONTENT_TYPE,
+                "authorization": f"{AUTH_TYPE} {token}",
+                "appkey": os.environ["KIS_APP_KEY"],
+                "appsecret": os.environ["KIS_APP_SECRET"],
+                "tr_id": tr_id,
+            },
+            params=params,
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Failed to make API request to {api_url}: {response.text}")
+        
+        return response.json()
+
 async def get_hashkey(client: httpx.AsyncClient, token: str, body: dict) -> str:
     """
     Get hash key for order request
@@ -288,7 +329,7 @@ async def get_hashkey(client: httpx.AsyncClient, token: str, body: dict) -> str:
         "FK50": {
             "type": "string",
             "required": False,
-            "description": "연속조회검색조건50 (선택사항)",
+            "description": "연속조회검색조건키50 (선택사항)",
             "examples": [""]
         }
     }
@@ -301,7 +342,7 @@ async def period_rights(
     pdno: str = "",  # 상품번호
     prdt_type_cd: str = "",  # 상품유형코드
     NK50: str = "",  # 연속조회키50
-    FK50: str = "",  # 연속조회검색조건50
+    FK50: str = "",  # 연속조회검색조건키50
 ):
     """
     해외주식 기간별권리조회 API입니다.
@@ -317,59 +358,40 @@ async def period_rights(
         pdno (str): 상품번호
         prdt_type_cd (str): 상품유형코드
         NK50 (str): 연속조회키50
-        FK50 (str): 연속조회검색조건50
+        FK50 (str): 연속조회검색조건키50
 
     Returns:
         pd.DataFrame: 해외주식 기간별권리조회 데이터
     """
+    # 필수 파라미터 검증
+    if rght_type_cd == "":
+        raise ValueError(
+            "rght_type_cd is required (e.g. '%%:전체, 01:유상, 02:무상, 03:배당, 11:합병,14:액면분할, 15:액면병합, 17:감자, 54:WR청구,61:원리금상환, 71:WR소멸, 74:배당옵션, 75:특별배당, 76:ISINCODE변경, 77:실권주청약')")
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        # 필수 파라미터 검증
-        if rght_type_cd == "":
-            raise ValueError(
-                "rght_type_cd is required (e.g. '%%:전체, 01:유상, 02:무상, 03:배당, 11:합병,14:액면분할, 15:액면병합, 17:감자, 54:WR청구,61:원리금상환, 71:WR소멸, 74:배당옵션, 75:특별배당, 76:ISINCODE변경, 77:실권주청약')")
+    if inqr_dvsn_cd == "":
+        raise ValueError("inqr_dvsn_cd is required (e.g. '02:현지기준일, 03:청약시작일, 04:청약종료일')")
 
-        if inqr_dvsn_cd == "":
-            raise ValueError("inqr_dvsn_cd is required (e.g. '02:현지기준일, 03:청약시작일, 04:청약종료일')")
+    if inqr_strt_dt == "":
+        raise ValueError("inqr_strt_dt is required (e.g. '20250101')")
 
-        if inqr_strt_dt == "":
-            raise ValueError("inqr_strt_dt is required (e.g. '20250101')")
+    if inqr_end_dt == "":
+        raise ValueError("inqr_end_dt is required (e.g. '20250131')")
 
-        if inqr_end_dt == "":
-            raise ValueError("inqr_end_dt is required (e.g. '20250131')")
+    tr_id = "CTRGT011R"  # 해외주식 기간별권리조회
+    api_url = "/uapi/overseas-price/v1/quotations/period-rights"
 
-        tr_id = "CTRGT011R"  # 해외주식 기간별권리조회
+    params = {
+        "RGHT_TYPE_CD": rght_type_cd,  # 권리유형코드
+        "INQR_DVSN_CD": inqr_dvsn_cd,  # 조회구분코드
+        "INQR_STRT_DT": inqr_strt_dt,  # 조회시작일자
+        "INQR_END_DT": inqr_end_dt,  # 조회종료일자
+        "PDNO": pdno,  # 상품번호
+        "PRDT_TYPE_CD": prdt_type_cd,  # 상품유형코드
+        "CTX_AREA_NK50": NK50,  # 연속조회키50
+        "CTX_AREA_FK50": FK50  # 연속조회검색조건키50
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/period-rights"
-
-        params = {
-            "RGHT_TYPE_CD": rght_type_cd,  # 권리유형코드
-            "INQR_DVSN_CD": inqr_dvsn_cd,  # 조회구분코드
-            "INQR_STRT_DT": inqr_strt_dt,  # 조회시작일자
-            "INQR_END_DT": inqr_end_dt,  # 조회종료일자
-            "PDNO": pdno,  # 상품번호
-            "PRDT_TYPE_CD": prdt_type_cd,  # 상품유형코드
-            "CTX_AREA_NK50": NK50,  # 연속조회키50
-            "CTX_AREA_FK50": FK50  # 연속조회검색조건50
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외속보(제목): {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 @mcp.tool(
     name="price",
@@ -414,49 +436,25 @@ async def price(
     Returns:
         Optional[pd.DataFrame]: 해외주식 현재체결가 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    # 필수 파라미터 검증
+    if not excd:
+        logger.error("excd is required. (e.g. 'NAS')")
+        raise ValueError("excd is required. (e.g. 'NAS')")
 
-        # 필수 파라미터 검증
-        if not excd:
-            logger.error("excd is required. (e.g. 'NAS')")
-            raise ValueError("excd is required. (e.g. 'NAS')")
+    if not symb:
+        logger.error("symb is required. (e.g. 'AAPL')")
+        raise ValueError("symb is required. (e.g. 'AAPL')")
 
-        if not symb:
-            logger.error("symb is required. (e.g. 'AAPL')")
-            raise ValueError("symb is required. (e.g. 'AAPL')")
+    tr_id = "HHDFS00000300"
+    api_url = "/uapi/overseas-price/v1/quotations/price"
 
-        tr_id = "HHDFS00000300"
+    params = {
+        "AUTH": auth,
+        "EXCD": excd,
+        "SYMB": symb,
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/price"
-
-        params = {
-            "AUTH": auth,
-            "EXCD": excd,
-            "SYMB": symb,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외속보(제목): {response.text}")
-
-        return response.json()
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to get overseas stock price: {response.text}")
-        
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 @mcp.tool(
@@ -551,47 +549,28 @@ async def brknews_title(
     Returns:
         pd.DataFrame: 해외속보(제목) 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    if fid_news_ofer_entp_code == "":
+        raise ValueError("fid_news_ofer_entp_code is required (e.g. '0')")
 
-        if fid_news_ofer_entp_code == "":
-            raise ValueError("fid_news_ofer_entp_code is required (e.g. '0')")
+    if fid_cond_scr_div_code == "":
+        raise ValueError("fid_cond_scr_div_code is required (e.g. '11801')")
 
-        if fid_cond_scr_div_code == "":
-            raise ValueError("fid_cond_scr_div_code is required (e.g. '11801')")
+    tr_id = "FHKST01011801"
+    api_url = "/uapi/overseas-price/v1/quotations/brknews-title"
 
-        tr_id = "FHKST01011801"
+    params = {
+        "FID_NEWS_OFER_ENTP_CODE": fid_news_ofer_entp_code,
+        "FID_COND_SCR_DIV_CODE": fid_cond_scr_div_code,
+        "FID_COND_MRKT_CLS_CODE": fid_cond_mrkt_cls_code,
+        "FID_INPUT_ISCD": fid_input_iscd,
+        "FID_TITL_CNTT": fid_titl_cntt,
+        "FID_INPUT_DATE_1": fid_input_date_1,
+        "FID_INPUT_HOUR_1": fid_input_hour_1,
+        "FID_RANK_SORT_CLS_CODE": fid_rank_sort_cls_code,
+        "FID_INPUT_SRNO": fid_input_srno
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/brknews-title"
-
-        params = {
-            "FID_NEWS_OFER_ENTP_CODE": fid_news_ofer_entp_code,
-            "FID_COND_SCR_DIV_CODE": fid_cond_scr_div_code,
-            "FID_COND_MRKT_CLS_CODE": fid_cond_mrkt_cls_code,
-            "FID_INPUT_ISCD": fid_input_iscd,
-            "FID_TITL_CNTT": fid_titl_cntt,
-            "FID_INPUT_DATE_1": fid_input_date_1,
-            "FID_INPUT_HOUR_1": fid_input_hour_1,
-            "FID_RANK_SORT_CLS_CODE": fid_rank_sort_cls_code,
-            "FID_INPUT_SRNO": fid_input_srno
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외속보(제목): {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 @mcp.tool(
@@ -652,46 +631,27 @@ async def inquire_ccnl(
     Returns:
         pd.DataFrame: 해외주식 체결추이 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'NAS')")
 
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'NAS')")
+    if tday == "":
+        raise ValueError("tday is required (e.g. '0' or '1')")
 
-        if tday == "":
-            raise ValueError("tday is required (e.g. '0' or '1')")
+    if symb == "":
+        raise ValueError("symb is required (e.g. 'TSLA')")
 
-        if symb == "":
-            raise ValueError("symb is required (e.g. 'TSLA')")
+    tr_id = "HHDFS76200300"
+    api_url = "/uapi/overseas-price/v1/quotations/inquire-ccnl"
 
-        tr_id = "HHDFS76200300"
+    params = {
+        "EXCD": excd,
+        "TDAY": tday,
+        "SYMB": symb,
+        "AUTH": auth,
+        "KEYB": keyb
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/inquire-ccnl"
-
-        params = {
-            "EXCD": excd,
-            "TDAY": tday,
-            "SYMB": symb,
-            "AUTH": auth,
-            "KEYB": keyb
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외주식 체결추이: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 @mcp.tool(
@@ -737,43 +697,24 @@ async def price_detail(
     Returns:
         Optional[pd.DataFrame]: 해외주식 현재가상세 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    # [필수 파라미터 검증]
+    if not excd:
+        logger.error("excd is required. (e.g. 'NAS')")
+        raise ValueError("excd is required. (e.g. 'NAS')")
+    if not symb:
+        logger.error("symb is required. (e.g. 'TSLA')")
+        raise ValueError("symb is required. (e.g. 'TSLA')")
 
-        # [필수 파라미터 검증]
-        if not excd:
-            logger.error("excd is required. (e.g. 'NAS')")
-            raise ValueError("excd is required. (e.g. 'NAS')")
-        if not symb:
-            logger.error("symb is required. (e.g. 'TSLA')")
-            raise ValueError("symb is required. (e.g. 'TSLA')")
+    tr_id = "HHDFS76200200"
+    api_url = "/uapi/overseas-price/v1/quotations/price-detail"
 
-        tr_id = "HHDFS76200200"
+    params = {
+        "AUTH": auth,
+        "EXCD": excd,
+        "SYMB": symb,
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/price-detail"
-
-        params = {
-            "AUTH": auth,
-            "EXCD": excd,
-            "SYMB": symb,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외주식 현재가상세: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 @mcp.tool(
@@ -859,40 +800,21 @@ async def news_title(
     Returns:
         pd.DataFrame: 해외뉴스종합(제목) 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    tr_id = "HHPSTH60100C1"  # 해외뉴스종합(제목)
+    api_url = "/uapi/overseas-price/v1/quotations/news-title"
 
-        tr_id = "HHPSTH60100C1"  # 해외뉴스종합(제목)
+    params = {
+        "INFO_GB": info_gb,  # 뉴스구분
+        "CLASS_CD": class_cd,  # 중분류
+        "NATION_CD": nation_cd,  # 국가코드
+        "EXCHANGE_CD": exchange_cd,  # 거래소코드
+        "SYMB": symb,  # 종목코드
+        "DATA_DT": data_dt,  # 조회일자
+        "DATA_TM": data_tm,  # 조회시간
+        "CTS": cts  # 다음키
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/news-title"
-
-        params = {
-            "INFO_GB": info_gb,  # 뉴스구분
-            "CLASS_CD": class_cd,  # 중분류
-            "NATION_CD": nation_cd,  # 국가코드
-            "EXCHANGE_CD": exchange_cd,  # 거래소코드
-            "SYMB": symb,  # 종목코드
-            "DATA_DT": data_dt,  # 조회일자
-            "DATA_TM": data_tm,  # 조회시간
-            "CTS": cts  # 다음키
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외뉴스종합(제목): {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 @mcp.tool(
@@ -988,58 +910,39 @@ async def inquire_time_itemchartprice(
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식분봉조회 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    # [필수 파라미터 검증]
+    if not excd:
+        logger.error("excd is required. (e.g. 'NAS')")
+        raise ValueError("excd is required. (e.g. 'NAS')")
+    if not symb:
+        logger.error("symb is required. (e.g. 'TSLA')")
+        raise ValueError("symb is required. (e.g. 'TSLA')")
+    if not nmin:
+        logger.error("nmin is required. (e.g. '5')")
+        raise ValueError("nmin is required. (e.g. '5')")
+    if not pinc:
+        logger.error("pinc is required. (e.g. '1')")
+        raise ValueError("pinc is required. (e.g. '1')")
+    if not nrec or int(nrec) > 120:
+        logger.error("nrec is required. (e.g. '120', 최대120개)")
+        raise ValueError("nrec is required. (e.g. '120', 최대120개)")
 
-        # [필수 파라미터 검증]
-        if not excd:
-            logger.error("excd is required. (e.g. 'NAS')")
-            raise ValueError("excd is required. (e.g. 'NAS')")
-        if not symb:
-            logger.error("symb is required. (e.g. 'TSLA')")
-            raise ValueError("symb is required. (e.g. 'TSLA')")
-        if not nmin:
-            logger.error("nmin is required. (e.g. '5')")
-            raise ValueError("nmin is required. (e.g. '5')")
-        if not pinc:
-            logger.error("pinc is required. (e.g. '1')")
-            raise ValueError("pinc is required. (e.g. '1')")
-        if not nrec or int(nrec) > 120:
-            logger.error("nrec is required. (e.g. '120', 최대120개)")
-            raise ValueError("nrec is required. (e.g. '120', 최대120개)")
+    tr_id = "HHDFS76950200"
+    api_url = "/uapi/overseas-price/v1/quotations/inquire-time-itemchartprice"
 
-        tr_id = "HHDFS76950200"
+    params = {
+        "AUTH": auth,
+        "EXCD": excd,
+        "SYMB": symb,
+        "NMIN": nmin,
+        "PINC": pinc,
+        "NEXT": next,
+        "NREC": nrec,
+        "FILL": fill,
+        "KEYB": keyb,
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/inquire-time-itemchartprice"
-
-        params = {
-            "AUTH": auth,
-            "EXCD": excd,
-            "SYMB": symb,
-            "NMIN": nmin,
-            "PINC": pinc,
-            "NEXT": next,
-            "NREC": nrec,
-            "FILL": fill,
-            "KEYB": keyb,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외주식분봉조회 데이터: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 @mcp.tool(
@@ -1095,50 +998,31 @@ async def inquire_time_indexchartprice(
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외지수분봉조회 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    # [필수 파라미터 검증]
+    if not fid_cond_mrkt_div_code:
+        logger.error("fid_cond_mrkt_div_code is required. (e.g. 'N')")
+        raise ValueError("fid_cond_mrkt_div_code is required. (e.g. 'N')")
+    if not fid_input_iscd:
+        logger.error("fid_input_iscd is required. (e.g. 'SPX')")
+        raise ValueError("fid_input_iscd is required. (e.g. 'SPX')")
+    if not fid_hour_cls_code:
+        logger.error("fid_hour_cls_code is required. (e.g. '0')")
+        raise ValueError("fid_hour_cls_code is required. (e.g. '0')")
+    if not fid_pw_data_incu_yn:
+        logger.error("fid_pw_data_incu_yn is required. (e.g. 'Y')")
+        raise ValueError("fid_pw_data_incu_yn is required. (e.g. 'Y')")
 
-        # [필수 파라미터 검증]
-        if not fid_cond_mrkt_div_code:
-            logger.error("fid_cond_mrkt_div_code is required. (e.g. 'N')")
-            raise ValueError("fid_cond_mrkt_div_code is required. (e.g. 'N')")
-        if not fid_input_iscd:
-            logger.error("fid_input_iscd is required. (e.g. 'SPX')")
-            raise ValueError("fid_input_iscd is required. (e.g. 'SPX')")
-        if not fid_hour_cls_code:
-            logger.error("fid_hour_cls_code is required. (e.g. '0')")
-            raise ValueError("fid_hour_cls_code is required. (e.g. '0')")
-        if not fid_pw_data_incu_yn:
-            logger.error("fid_pw_data_incu_yn is required. (e.g. 'Y')")
-            raise ValueError("fid_pw_data_incu_yn is required. (e.g. 'Y')")
+    tr_id = "FHKST03030200"
+    api_url = "/uapi/overseas-price/v1/quotations/inquire-time-indexchartprice"
 
-        tr_id = "FHKST03030200"
+    params = {
+        "FID_COND_MRKT_DIV_CODE": fid_cond_mrkt_div_code,
+        "FID_INPUT_ISCD": fid_input_iscd,
+        "FID_HOUR_CLS_CODE": fid_hour_cls_code,
+        "FID_PW_DATA_INCU_YN": fid_pw_data_incu_yn,
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/inquire-time-indexchartprice"
-
-        params = {
-            "FID_COND_MRKT_DIV_CODE": fid_cond_mrkt_div_code,
-            "FID_INPUT_ISCD": fid_input_iscd,
-            "FID_HOUR_CLS_CODE": fid_hour_cls_code,
-            "FID_PW_DATA_INCU_YN": fid_pw_data_incu_yn,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외지수분봉조회 데이터: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 @mcp.tool(
@@ -1376,64 +1260,45 @@ async def inquire_search(
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식조건검색 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    # [필수 파라미터 검증]
+    if not excd:
+        logger.error("excd is required. (e.g. 'NAS')")
+        raise ValueError("excd is required. (e.g. 'NAS')")
 
-        # [필수 파라미터 검증]
-        if not excd:
-            logger.error("excd is required. (e.g. 'NAS')")
-            raise ValueError("excd is required. (e.g. 'NAS')")
+    tr_id = "HHDFS76410000"
+    api_url = "/uapi/overseas-price/v1/quotations/inquire-search"
 
-        tr_id = "HHDFS76410000"
+    params = {
+        "AUTH": auth,
+        "EXCD": excd,
+        "CO_YN_PRICECUR": co_yn_pricecur,
+        "CO_ST_PRICECUR": co_st_pricecur,
+        "CO_EN_PRICECUR": co_en_pricecur,
+        "CO_YN_RATE": co_yn_rate,
+        "CO_ST_RATE": co_st_rate,
+        "CO_EN_RATE": co_en_rate,
+        "CO_YN_VALX": co_yn_valx,
+        "CO_ST_VALX": co_st_valx,
+        "CO_EN_VALX": co_en_valx,
+        "CO_YN_SHAR": co_yn_shar,
+        "CO_ST_SHAR": co_st_shar,
+        "CO_EN_SHAR": co_en_shar,
+        "CO_YN_VOLUME": co_yn_volume,
+        "CO_ST_VOLUME": co_st_volume,
+        "CO_EN_VOLUME": co_en_volume,
+        "CO_YN_AMT": co_yn_amt,
+        "CO_ST_AMT": co_st_amt,
+        "CO_EN_AMT": co_en_amt,
+        "CO_YN_EPS": co_yn_eps,
+        "CO_ST_EPS": co_st_eps,
+        "CO_EN_EPS": co_en_eps,
+        "CO_YN_PER": co_yn_per,
+        "CO_ST_PER": co_st_per,
+        "CO_EN_PER": co_en_per,
+        "KEYB": keyb,
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/inquire-search"
-
-        params = {
-            "AUTH": auth,
-            "EXCD": excd,
-            "CO_YN_PRICECUR": co_yn_pricecur,
-            "CO_ST_PRICECUR": co_st_pricecur,
-            "CO_EN_PRICECUR": co_en_pricecur,
-            "CO_YN_RATE": co_yn_rate,
-            "CO_ST_RATE": co_st_rate,
-            "CO_EN_RATE": co_en_rate,
-            "CO_YN_VALX": co_yn_valx,
-            "CO_ST_VALX": co_st_valx,
-            "CO_EN_VALX": co_en_valx,
-            "CO_YN_SHAR": co_yn_shar,
-            "CO_ST_SHAR": co_st_shar,
-            "CO_EN_SHAR": co_en_shar,
-            "CO_YN_VOLUME": co_yn_volume,
-            "CO_ST_VOLUME": co_st_volume,
-            "CO_EN_VOLUME": co_en_volume,
-            "CO_YN_AMT": co_yn_amt,
-            "CO_ST_AMT": co_st_amt,
-            "CO_EN_AMT": co_en_amt,
-            "CO_YN_EPS": co_yn_eps,
-            "CO_ST_EPS": co_st_eps,
-            "CO_EN_EPS": co_en_eps,
-            "CO_YN_PER": co_yn_per,
-            "CO_ST_PER": co_st_per,
-            "CO_EN_PER": co_en_per,
-            "KEYB": keyb,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외주식조건검색 데이터: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 @mcp.tool(
@@ -1471,42 +1336,23 @@ async def search_info(
     Returns:
         Optional[pd.DataFrame]: 해외주식 상품기본정보 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    # [필수 파라미터 검증]
+    if not prdt_type_cd:
+        logger.error("prdt_type_cd is required. (e.g. '512')")
+        raise ValueError("prdt_type_cd is required. (e.g. '512')")
+    if not pdno:
+        logger.error("pdno is required. (e.g. 'AAPL')")
+        raise ValueError("pdno is required. (e.g. 'AAPL')")
 
-        # [필수 파라미터 검증]
-        if not prdt_type_cd:
-            logger.error("prdt_type_cd is required. (e.g. '512')")
-            raise ValueError("prdt_type_cd is required. (e.g. '512')")
-        if not pdno:
-            logger.error("pdno is required. (e.g. 'AAPL')")
-            raise ValueError("pdno is required. (e.g. 'AAPL')")
+    tr_id = "CTPF1702R"
+    api_url = "/uapi/overseas-price/v1/quotations/search-info"
 
-        tr_id = "CTPF1702R"
+    params = {
+        "PRDT_TYPE_CD": prdt_type_cd,
+        "PDNO": pdno,
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/search-info"
-
-        params = {
-            "PRDT_TYPE_CD": prdt_type_cd,
-            "PDNO": pdno,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get 해외주식 상품기본정보: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -1582,52 +1428,33 @@ async def dailyprice(
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 기간별시세 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    # 필수 파라미터 검증
+    if not excd:
+        logger.error("excd is required. (e.g. 'NAS')")
+        raise ValueError("excd is required. (e.g. 'NAS')")
+    if not symb:
+        logger.error("symb is required. (e.g. 'TSLA')")
+        raise ValueError("symb is required. (e.g. 'TSLA')")
+    if not gubn:
+        logger.error("gubn is required. (e.g. '0')")
+        raise ValueError("gubn is required. (e.g. '0')")
+    if not modp:
+        logger.error("modp is required. (e.g. '0')")
+        raise ValueError("modp is required. (e.g. '0')")
 
-        # 필수 파라미터 검증
-        if not excd:
-            logger.error("excd is required. (e.g. 'NAS')")
-            raise ValueError("excd is required. (e.g. 'NAS')")
-        if not symb:
-            logger.error("symb is required. (e.g. 'TSLA')")
-            raise ValueError("symb is required. (e.g. 'TSLA')")
-        if not gubn:
-            logger.error("gubn is required. (e.g. '0')")
-            raise ValueError("gubn is required. (e.g. '0')")
-        if not modp:
-            logger.error("modp is required. (e.g. '0')")
-            raise ValueError("modp is required. (e.g. '0')")
+    tr_id = "HHDFS76240000"  # 실전/모의투자 공통 TR ID
+    api_url = "/uapi/overseas-price/v1/quotations/dailyprice"
 
-        tr_id = "HHDFS76240000"  # 실전/모의투자 공통 TR ID
+    params = {
+        "AUTH": auth,
+        "EXCD": excd,
+        "SYMB": symb,
+        "GUBN": gubn,
+        "BYMD": bymd,
+        "MODP": modp,
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/dailyprice"
-
-        params = {
-            "AUTH": auth,
-            "EXCD": excd,
-            "SYMB": symb,
-            "GUBN": gubn,
-            "BYMD": bymd,
-            "MODP": modp,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -1691,47 +1518,27 @@ async def industry_theme(
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
     """
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'NAS')")
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    if icod == "":
+        raise ValueError("icod is required")
 
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'NAS')")
+    if vol_rang == "":
+        raise ValueError("vol_rang is required (e.g. '0')")
 
-        if icod == "":
-            raise ValueError("icod is required")
+    tr_id = "HHDFS76370000"
+    api_url = "/uapi/overseas-price/v1/quotations/industry-theme"
 
-        if vol_rang == "":
-            raise ValueError("vol_rang is required (e.g. '0')")
+    params = {
+        "EXCD": excd,
+        "ICOD": icod,
+        "VOL_RANG": vol_rang,
+        "AUTH": auth,
+        "KEYB": keyb
+    }
 
-        tr_id = "HHDFS76370000"
-
-        api_url = "/uapi/overseas-price/v1/quotations/industry-theme"
-
-        params = {
-            "EXCD": excd,
-            "ICOD": icod,
-            "VOL_RANG": vol_rang,
-            "AUTH": auth,
-            "KEYB": keyb
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -1781,42 +1588,24 @@ async def inquire_asking_price(
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: 해외주식 현재가 1호가 데이터
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        # [필수 파라미터 검증]
-        if not excd:
-            logger.error("excd is required. (e.g. 'NAS')")
-            raise ValueError("excd is required. (e.g. 'NAS')")
-        if not symb:
-            logger.error("symb is required. (e.g. 'TSLA')")
-            raise ValueError("symb is required. (e.g. 'TSLA')")
+    # [필수 파라미터 검증]
+    if not excd:
+        logger.error("excd is required. (e.g. 'NAS')")
+        raise ValueError("excd is required. (e.g. 'NAS')")
+    if not symb:
+        logger.error("symb is required. (e.g. 'TSLA')")
+        raise ValueError("symb is required. (e.g. 'TSLA')")
 
-        tr_id = "HHDFS76200100"
+    tr_id = "HHDFS76200100"
+    api_url = "/uapi/overseas-price/v1/quotations/inquire-asking-price"
 
-        api_url = "/uapi/overseas-price/v1/quotations/inquire-asking-price"
+    params = {
+        "AUTH": auth,
+        "EXCD": excd,
+        "SYMB": symb,
+    }
 
-        params = {
-            "AUTH": auth,
-            "EXCD": excd,
-            "SYMB": symb,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -1881,46 +1670,27 @@ async def quot_inquire_ccnl(
         pd.DataFrame: 해외주식 체결추이 데이터
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'NAS')")
 
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'NAS')")
+    if tday == "":
+        raise ValueError("tday is required (e.g. '0' or '1')")
 
-        if tday == "":
-            raise ValueError("tday is required (e.g. '0' or '1')")
+    if symb == "":
+        raise ValueError("symb is required (e.g. 'TSLA')")
 
-        if symb == "":
-            raise ValueError("symb is required (e.g. 'TSLA')")
+    tr_id = "HHDFS76200300"
+    api_url = "/uapi/overseas-price/v1/quotations/inquire-ccnl"
 
-        tr_id = "HHDFS76200300"
+    params = {
+        "EXCD": excd,
+        "TDAY": tday,
+        "SYMB": symb,
+        "AUTH": auth,
+        "KEYB": keyb
+    }
 
-        api_url = "/uapi/overseas-price/v1/quotations/inquire-ccnl"
-
-        params = {
-            "EXCD": excd,
-            "TDAY": tday,
-            "SYMB": symb,
-            "AUTH": auth,
-            "KEYB": keyb
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 ##############################################################################################
 # [해외주식] 기본시세 > 해외주식 종목_지수_환율기간별시세(일_주_월_년)[v1_해외주식-012]
@@ -1964,11 +1734,11 @@ async def quot_inquire_ccnl(
     }
 )
 async def inquire_daily_chartprice(
-        fid_cond_mrkt_div_code: str,  # FID 조건 시장 분류 코드
-        fid_input_iscd: str,  # FID 입력 종목코드
-        fid_input_date_1: str,  # FID 입력 날짜1
-        fid_input_date_2: str,  # FID 입력 날짜2
-        fid_period_div_code: str,  # FID 기간 분류 코드
+    fid_cond_mrkt_div_code: str,  # FID 조건 시장 분류 코드
+    fid_input_iscd: str,  # FID 입력 종목코드
+    fid_input_date_1: str,  # FID 입력 날짜1
+    fid_input_date_2: str,  # FID 입력 날짜2
+    fid_period_div_code: str,  # FID 기간 분류 코드
 ):
     """
     [해외주식] 기본시세
@@ -1985,53 +1755,35 @@ async def inquire_daily_chartprice(
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 종목_지수_환율기간별시세(일_주_월_년) 데이터
     """
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        # [필수 파라미터 검증]
-        if not fid_cond_mrkt_div_code:
-            logger.error("fid_cond_mrkt_div_code is required. (e.g. 'N')")
-            raise ValueError("fid_cond_mrkt_div_code is required. (e.g. 'N')")
-        if not fid_input_iscd:
-            logger.error("fid_input_iscd is required. (e.g. '.DJI')")
-            raise ValueError("fid_input_iscd is required. (e.g. '.DJI')")
-        if not fid_input_date_1:
-            logger.error("fid_input_date_1 is required. (e.g. '20220401')")
-            raise ValueError("fid_input_date_1 is required. (e.g. '20220401')")
-        if not fid_input_date_2:
-            logger.error("fid_input_date_2 is required. (e.g. '20220613')")
-            raise ValueError("fid_input_date_2 is required. (e.g. '20220613')")
-        if not fid_period_div_code:
-            logger.error("fid_period_div_code is required. (e.g. 'D')")
-            raise ValueError("fid_period_div_code is required. (e.g. 'D')")
+    # [필수 파라미터 검증]
+    if not fid_cond_mrkt_div_code:
+        logger.error("fid_cond_mrkt_div_code is required. (e.g. 'N')")
+        raise ValueError("fid_cond_mrkt_div_code is required. (e.g. 'N')")
+    if not fid_input_iscd:
+        logger.error("fid_input_iscd is required. (e.g. '.DJI')")
+        raise ValueError("fid_input_iscd is required. (e.g. '.DJI')")
+    if not fid_input_date_1:
+        logger.error("fid_input_date_1 is required. (e.g. '20220401')")
+        raise ValueError("fid_input_date_1 is required. (e.g. '20220401')")
+    if not fid_input_date_2:
+        logger.error("fid_input_date_2 is required. (e.g. '20220613')")
+        raise ValueError("fid_input_date_2 is required. (e.g. '20220613')")
+    if not fid_period_div_code:
+        logger.error("fid_period_div_code is required. (e.g. 'D')")
+        raise ValueError("fid_period_div_code is required. (e.g. 'D')")
 
-        tr_id = "FHKST03030100"  # 실전투자용 TR ID
+    tr_id = "FHKST03030100"  # 실전투자용 TR ID
+    api_url = "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
 
-        api_url = "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice"
+    params = {
+        "FID_COND_MRKT_DIV_CODE": fid_cond_mrkt_div_code,
+        "FID_INPUT_ISCD": fid_input_iscd,
+        "FID_INPUT_DATE_1": fid_input_date_1,
+        "FID_INPUT_DATE_2": fid_input_date_2,
+        "FID_PERIOD_DIV_CODE": fid_period_div_code,
+    }
 
-        params = {
-            "FID_COND_MRKT_DIV_CODE": fid_cond_mrkt_div_code,
-            "FID_INPUT_ISCD": fid_input_iscd,
-            "FID_INPUT_DATE_1": fid_input_date_1,
-            "FID_INPUT_DATE_2": fid_input_date_2,
-            "FID_PERIOD_DIV_CODE": fid_period_div_code,
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2071,36 +1823,18 @@ async def industry_price(
         Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 데이터
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'NYS', 'NAS', 'AMS', 'HKS', 'SHS', 'SZS', 'HSX', 'HNX', 'TSE')")
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'NYS', 'NAS', 'AMS', 'HKS', 'SHS', 'SZS', 'HSX', 'HNX', 'TSE')")
 
-        tr_id = "HHDFS76370100"
+    tr_id = "HHDFS76370100"
+    api_url = "/uapi/overseas-price/v1/quotations/industry-price"
 
-        api_url = "/uapi/overseas-price/v1/quotations/industry-price"
+    params = {
+        "EXCD": excd,
+        "AUTH": auth
+    }
 
-        params = {
-            "EXCD": excd,
-            "AUTH": auth
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2167,45 +1901,27 @@ async def volume_surge(
         Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'NYS')")
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'NYS')")
 
-        if mixn == "":
-            raise ValueError("mixn is required (e.g. '0')")
+    if mixn == "":
+        raise ValueError("mixn is required (e.g. '0')")
 
-        if vol_rang == "":
-            raise ValueError("vol_rang is required (e.g. '0')")
+    if vol_rang == "":
+        raise ValueError("vol_rang is required (e.g. '0')")
 
-        tr_id = "HHDFS76270000"  # 해외주식 거래량급증
+    tr_id = "HHDFS76270000"  # 해외주식 거래량급증
+    api_url = "/uapi/overseas-stock/v1/ranking/volume-surge"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/volume-surge"
+    params = {
+        "EXCD": excd,  # 거래소명
+        "MIXN": mixn,  # N분전코드값
+        "VOL_RANG": vol_rang,  # 거래량조건
+        "KEYB": keyb,  # NEXT KEY BUFF
+        "AUTH": auth  # 사용자권한정보
+    }
 
-        params = {
-            "EXCD": excd,  # 거래소명
-            "MIXN": mixn,  # N분전코드값
-            "VOL_RANG": vol_rang,  # 거래량조건
-            "KEYB": keyb,  # NEXT KEY BUFF
-            "AUTH": auth  # 사용자권한정보
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2273,45 +1989,27 @@ async def volume_power(
         Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'HKS')")
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'HKS')")
 
-        if nday == "":
-            raise ValueError("nday is required (e.g. '0')")
+    if nday == "":
+        raise ValueError("nday is required (e.g. '0')")
 
-        if vol_rang == "":
-            raise ValueError("vol_rang is required (e.g. '0')")
+    if vol_rang == "":
+        raise ValueError("vol_rang is required (e.g. '0')")
 
-        tr_id = "HHDFS76280000"
+    tr_id = "HHDFS76280000"
+    api_url = "/uapi/overseas-stock/v1/ranking/volume-power"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/volume-power"
+    params = {
+        "EXCD": excd,
+        "NDAY": nday,
+        "VOL_RANG": vol_rang,
+        "AUTH": auth,
+        "KEYB": keyb
+    }
 
-        params = {
-            "EXCD": excd,
-            "NDAY": nday,
-            "VOL_RANG": vol_rang,
-            "AUTH": auth,
-            "KEYB": keyb
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2386,52 +2084,34 @@ async def updown_rate(
         Tuple[pd.DataFrame, pd.DataFrame]: 상승률/하락률 순위 데이터
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        # 필수 파라미터 검증
-        if excd == "":
-            raise ValueError(
-                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+    # 필수 파라미터 검증
+    if excd == "":
+        raise ValueError(
+            "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
 
-        if nday == "":
-            raise ValueError("nday is required (e.g. '0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년')")
+    if nday == "":
+        raise ValueError("nday is required (e.g. '0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년')")
 
-        if gubn == "":
-            raise ValueError("gubn is required (e.g. '0:하락률, 1:상승률')")
+    if gubn == "":
+        raise ValueError("gubn is required (e.g. '0:하락률, 1:상승률')")
 
-        if vol_rang == "":
-            raise ValueError(
-                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+    if vol_rang == "":
+        raise ValueError(
+            "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
 
-        tr_id = "HHDFS76290000"
+    tr_id = "HHDFS76290000"
+    api_url = "/uapi/overseas-stock/v1/ranking/updown-rate"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/updown-rate"
+    params = {
+        "EXCD": excd,
+        "NDAY": nday,
+        "GUBN": gubn,
+        "VOL_RANG": vol_rang,
+        "AUTH": auth,
+        "KEYB": keyb
+    }
 
-        params = {
-            "EXCD": excd,
-            "NDAY": nday,
-            "GUBN": gubn,
-            "VOL_RANG": vol_rang,
-            "AUTH": auth,
-            "KEYB": keyb
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2514,51 +2194,33 @@ async def trade_vol(
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 거래량순위 데이터 (output1, output2)
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        # 필수 파라미터 검증
-        if excd == "":
-            raise ValueError(
-                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+    # 필수 파라미터 검증
+    if excd == "":
+        raise ValueError(
+            "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
 
-        if nday == "":
-            raise ValueError(
-                "nday is required (e.g. '0:당일, 1:2일전, 2:3일전, 3:5일전, 4:10일전, 5:20일전, 6:30일전, 7:60일전, 8:120일전, 9:1년전')")
+    if nday == "":
+        raise ValueError(
+            "nday is required (e.g. '0:당일, 1:2일전, 2:3일전, 3:5일전, 4:10일전, 5:20일전, 6:30일전, 7:60일전, 8:120일전, 9:1년전')")
 
-        if vol_rang == "":
-            raise ValueError(
-                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+    if vol_rang == "":
+        raise ValueError(
+            "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
 
-        tr_id = "HHDFS76310010"  # 해외주식 거래량순위
+    tr_id = "HHDFS76310010"  # 해외주식 거래량순위
+    api_url = "/uapi/overseas-stock/v1/ranking/trade-vol"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/trade-vol"
+    params = {
+        "EXCD": excd,
+        "NDAY": nday,
+        "VOL_RANG": vol_rang,
+        "KEYB": keyb,
+        "AUTH": auth,
+        "PRC1": prc1,
+        "PRC2": prc2
+    }
 
-        params = {
-            "EXCD": excd,
-            "NDAY": nday,
-            "VOL_RANG": vol_rang,
-            "KEYB": keyb,
-            "AUTH": auth,
-            "PRC1": prc1,
-            "PRC2": prc2
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2625,49 +2287,31 @@ async def trade_turnover(
         Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 해외주식 거래회전율순위 데이터
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        # 필수 파라미터 검증
-        if excd == "":
-            raise ValueError(
-                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+    # 필수 파라미터 검증
+    if excd == "":
+        raise ValueError(
+            "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
 
-        if nday == "":
-            raise ValueError(
-                "nday is required (e.g. '0:당일, 1:2일전, 2:3일전, 3:5일전, 4:10일전, 5:20일전, 6:30일전, 7:60일전, 8:120일전, 9:1년전')")
+    if nday == "":
+        raise ValueError(
+            "nday is required (e.g. '0:당일, 1:2일전, 2:3일전, 3:5일전, 4:10일전, 5:20일전, 6:30일전, 7:60일전, 8:120일전, 9:1년전')")
 
-        if vol_rang == "":
-            raise ValueError(
-                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+    if vol_rang == "":
+        raise ValueError(
+            "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
 
-        tr_id = "HHDFS76340000"  # 해외주식 거래회전율순위
+    tr_id = "HHDFS76340000"  # 해외주식 거래회전율순위
+    api_url = "/uapi/overseas-stock/v1/ranking/trade-turnover"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/trade-turnover"
+    params = {
+        "EXCD": excd,  # 거래소명
+        "NDAY": nday,  # N분전코드보값
+        "VOL_RANG": vol_rang,  # 거래량조건
+        "KEYB": keyb,  # NEXT KEY BUFF
+        "AUTH": auth  # 사용자권한정보
+    }
 
-        params = {
-            "EXCD": excd,  # 거래소명
-            "NDAY": nday,  # N분전코드보값
-            "VOL_RANG": vol_rang,  # 거래량조건
-            "KEYB": keyb,  # NEXT KEY BUFF
-            "AUTH": auth  # 사용자권한정보
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2749,49 +2393,31 @@ async def trade_pbmn(
         Tuple[pd.DataFrame, pd.DataFrame]: 거래대금순위 데이터 (output1, output2)
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        if excd == "":
-            raise ValueError(
-                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+    if excd == "":
+        raise ValueError(
+            "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
 
-        if nday == "":
-            raise ValueError("nday is required (e.g. '0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년')")
+    if nday == "":
+        raise ValueError("nday is required (e.g. '0:당일, 1:2일, 2:3일, 3:5일, 4:10일, 5:20일전, 6:30일, 7:60일, 8:120일, 9:1년')")
 
-        if vol_rang == "":
-            raise ValueError(
-                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+    if vol_rang == "":
+        raise ValueError(
+            "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
 
-        tr_id = "HHDFS76320010"  # 해외주식 거래대금순위
+    tr_id = "HHDFS76320010"  # 해외주식 거래대금순위
+    api_url = "/uapi/overseas-stock/v1/ranking/trade-pbmn"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/trade-pbmn"
+    params = {
+        "EXCD": excd,  # 거래소명
+        "NDAY": nday,  # N일자값
+        "VOL_RANG": vol_rang,  # 거래량조건
+        "AUTH": auth,  # 사용자권한정보
+        "KEYB": keyb,  # NEXT KEY BUFF
+        "PRC1": prc1,  # 현재가 필터범위 시작
+        "PRC2": prc2,  # 현재가 필터범위 끝
+    }
 
-        params = {
-            "EXCD": excd,  # 거래소명
-            "NDAY": nday,  # N일자값
-            "VOL_RANG": vol_rang,  # 거래량조건
-            "AUTH": auth,  # 사용자권한정보
-            "KEYB": keyb,  # NEXT KEY BUFF
-            "PRC1": prc1,  # 현재가 필터범위 시작
-            "PRC2": prc2,  # 현재가 필터범위 끝
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2858,45 +2484,27 @@ async def trade_growth(
         Tuple[pd.DataFrame, pd.DataFrame]: (output1, output2) 데이터프레임 튜플
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'NYS')")
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'NYS')")
 
-        if nday == "":
-            raise ValueError("nday is required (e.g. '0')")
+    if nday == "":
+        raise ValueError("nday is required (e.g. '0')")
 
-        if vol_rang == "":
-            raise ValueError("vol_rang is required (e.g. '0')")
+    if vol_rang == "":
+        raise ValueError("vol_rang is required (e.g. '0')")
 
-        tr_id = "HHDFS76330000"  # 해외주식 거래증가율순위
+    tr_id = "HHDFS76330000"  # 해외주식 거래증가율순위
+    api_url = "/uapi/overseas-stock/v1/ranking/trade-growth"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/trade-growth"
+    params = {
+        "EXCD": excd,
+        "NDAY": nday,
+        "VOL_RANG": vol_rang,
+        "AUTH": auth,
+        "KEYB": keyb
+    }
 
-        params = {
-            "EXCD": excd,
-            "NDAY": nday,
-            "VOL_RANG": vol_rang,
-            "AUTH": auth,
-            "KEYB": keyb
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -2972,49 +2580,31 @@ async def price_fluct(
         Tuple[pd.DataFrame, pd.DataFrame]: 해외주식 가격급등락 데이터 (output1, output2)
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'NAS')")
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'NAS')")
 
-        if gubn == "":
-            raise ValueError("gubn is required (e.g. '0' or '1')")
+    if gubn == "":
+        raise ValueError("gubn is required (e.g. '0' or '1')")
 
-        if mixn == "":
-            raise ValueError("mixn is required (e.g. '0')")
+    if mixn == "":
+        raise ValueError("mixn is required (e.g. '0')")
 
-        if vol_rang == "":
-            raise ValueError("vol_rang is required (e.g. '0')")
+    if vol_rang == "":
+        raise ValueError("vol_rang is required (e.g. '0')")
 
-        tr_id = "HHDFS76260000"  # 해외주식 가격급등락
+    tr_id = "HHDFS76260000"  # 해외주식 가격급등락
+    api_url = "/uapi/overseas-stock/v1/ranking/price-fluct"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/price-fluct"
+    params = {
+        "EXCD": excd,
+        "GUBN": gubn,
+        "MIXN": mixn,
+        "VOL_RANG": vol_rang,
+        "KEYB": keyb,
+        "AUTH": auth
+    }
 
-        params = {
-            "EXCD": excd,
-            "GUBN": gubn,
-            "MIXN": mixn,
-            "VOL_RANG": vol_rang,
-            "KEYB": keyb,
-            "AUTH": auth
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -3099,53 +2689,35 @@ async def new_highlow(
         Tuple[pd.DataFrame, pd.DataFrame]: (output1 데이터, output2 데이터)
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        if excd == "":
-            raise ValueError("excd is required (e.g. 'NYS')")
+    if excd == "":
+        raise ValueError("excd is required (e.g. 'NYS')")
 
-        if mixn == "":
-            raise ValueError("mixn is required (e.g. '0')")
+    if mixn == "":
+        raise ValueError("mixn is required (e.g. '0')")
 
-        if vol_rang == "":
-            raise ValueError("vol_rang is required (e.g. '0')")
+    if vol_rang == "":
+        raise ValueError("vol_rang is required (e.g. '0')")
 
-        if gubn == "":
-            raise ValueError("gubn is required (e.g. '1')")
+    if gubn == "":
+        raise ValueError("gubn is required (e.g. '1')")
 
-        if gubn2 == "":
-            raise ValueError("gubn2 is required (e.g. '1')")
+    if gubn2 == "":
+        raise ValueError("gubn2 is required (e.g. '1')")
 
-        tr_id = "HHDFS76300000"  # 해외주식 신고/신저가
+    tr_id = "HHDFS76300000"  # 해외주식 신고/신저가
+    api_url = "/uapi/overseas-stock/v1/ranking/new-highlow"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/new-highlow"
+    params = {
+        "EXCD": excd,
+        "MIXN": mixn,
+        "VOL_RANG": vol_rang,
+        "GUBN": gubn,
+        "GUBN2": gubn2,
+        "KEYB": keyb,
+        "AUTH": auth
+    }
 
-        params = {
-            "EXCD": excd,
-            "MIXN": mixn,
-            "VOL_RANG": vol_rang,
-            "GUBN": gubn,
-            "GUBN2": gubn2,
-            "KEYB": keyb,
-            "AUTH": auth
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 ##############################################################################################
@@ -3190,7 +2762,7 @@ async def market_cap(
     auth: str = "",  # 사용자권한정보
 ):
     """
-    해외주식 시가총액순위 조회 API를 호출하여 DataFrame으로 반환합니다.
+    해외주식 시가총액순위 조회API를 호출하여 DataFrame으로 반환합니다.
 
     Args:
         excd (str): [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -3202,43 +2774,25 @@ async def market_cap(
         Tuple[pd.DataFrame, pd.DataFrame]: 시가총액순위 데이터 (output1, output2)
     """
 
-    async with httpx.AsyncClient() as client:
-        token = await get_access_token(client)
-        if excd == "":
-            raise ValueError(
-                "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
+    if excd == "":
+        raise ValueError(
+            "excd is required (e.g. 'NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄')")
 
-        if vol_rang == "":
-            raise ValueError(
-                "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
+    if vol_rang == "":
+        raise ValueError(
+            "vol_rang is required (e.g. '0:전체, 1:1백주이상, 2:1천주이상, 3:1만주이상, 4:10만주이상, 5:100만주이상, 6:1000만주이상')")
 
-        tr_id = "HHDFS76350100"  # 해외주식 시가총액순위
+    tr_id = "HHDFS76350100"  # 해외주식 시가총액순위
+    api_url = "/uapi/overseas-stock/v1/ranking/market-cap"
 
-        api_url = "/uapi/overseas-stock/v1/ranking/market-cap"
+    params = {
+        "EXCD": excd,  # 거래소명
+        "VOL_RANG": vol_rang,  # 거래량조건
+        "KEYB": keyb,  # NEXT KEY BUFF
+        "AUTH": auth,  # 사용자권한정보
+    }
 
-        params = {
-            "EXCD": excd,  # 거래소명
-            "VOL_RANG": vol_rang,  # 거래량조건
-            "KEYB": keyb,  # NEXT KEY BUFF
-            "AUTH": auth,  # 사용자권한정보
-        }
-
-        response = await client.get(
-            f"{TrIdManager.get_domain('buy')}{api_url}",
-            headers={
-                "content-type": CONTENT_TYPE,
-                "authorization": f"{AUTH_TYPE} {token}",
-                "appkey": os.environ["KIS_APP_KEY"],
-                "appsecret": os.environ["KIS_APP_SECRET"],
-                "tr_id": tr_id,
-            },
-            params=params,
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to get: {response.text}")
-
-        return response.json()
+    return await make_api_request(api_url, tr_id, params)
 
 
 
