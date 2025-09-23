@@ -11,6 +11,35 @@ from datetime import datetime, timedelta
 import httpx
 from mcp.server.fastmcp.server import FastMCP
 
+from annotations import (
+    period_rights_annotations,
+    price_annotations,
+    brknews_title_annotations,
+    inquire_ccnl_annotations,
+    price_detail_annotations,
+    news_title_annotations,
+    inquire_time_itemchartprice_annotations,
+    inquire_time_indexchartprice_annotations,
+    inquire_search_annotations,
+    search_info_annotations,
+    dailyprice_annotations,
+    industry_theme_annotations,
+    inquire_asking_price_annotations,
+    quot_inquire_ccnl_annotations,
+    inquire_daily_chartprice_annotations,
+    industry_price_annotations,
+    volume_surge_annotations,
+    volume_power_annotations,
+    updown_rate_annotations,
+    trade_vol_annotations,
+    trade_turnover_annotations,
+    trade_pbmn_annotations,
+    trade_growth_annotations,
+    price_fluct_annotations,
+    new_highlow_annotations,
+    market_cap_annotations
+)
+
 # 로깅 설정: 반드시 stderr로 출력
 logging.basicConfig(
     level=logging.DEBUG,
@@ -281,58 +310,7 @@ async def get_hashkey(client: httpx.AsyncClient, token: str, body: dict) -> str:
 @mcp.tool(
     name="period_rights",
     description="시세분석 > 해외주식 기간별권리조회",
-    annotations={
-        "rght_type_cd": {
-            "type": "string",
-            "required": True,
-            "description": "권리유형코드",
-            "examples": ["%%", "01", "02", "03"],
-            "enum": ["%%:전체", "01:유상", "02:무상", "03:배당", "11:합병", "14:액면분할", "15:액면병합", "17:감자", "54:WR청구", "61:원리금상환", "71:WR소멸", "74:배당옵션", "75:특별배당", "76:ISINCODE변경", "77:실권주청약"]
-        },
-        "inqr_dvsn_cd": {
-            "type": "string", 
-            "required": True,
-            "description": "조회구분코드",
-            "examples": ["02", "03", "04"],
-            "enum": ["02:현지기준일", "03:청약시작일", "04:청약종료일"]
-        },
-        "inqr_strt_dt": {
-            "type": "string",
-            "required": True,
-            "description": "조회시작일자 (YYYYMMDD 형식)",
-            "examples": ["20250101", "20240315"]
-        },
-        "inqr_end_dt": {
-            "type": "string",
-            "required": True,
-            "description": "조회종료일자 (YYYYMMDD 형식)",
-            "examples": ["20250131", "20240415"]
-        },
-        "pdno": {
-            "type": "string",
-            "required": False,
-            "description": "상품번호 (선택사항)",
-            "examples": [""]
-        },
-        "prdt_type_cd": {
-            "type": "string",
-            "required": False,
-            "description": "상품유형코드 (선택사항)",
-            "examples": [""]
-        },
-        "NK50": {
-            "type": "string",
-            "required": False,
-            "description": "연속조회키50 (선택사항)",
-            "examples": [""]
-        },
-        "FK50": {
-            "type": "string",
-            "required": False,
-            "description": "연속조회검색조건키50 (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=period_rights_annotations
 )
 async def period_rights(
     rght_type_cd: str,  # 권리유형코드
@@ -396,27 +374,7 @@ async def period_rights(
 @mcp.tool(
     name="price",
     description="기본시세 > 해외주식 현재체결가",
-    annotations={
-        "auth": {
-            "type": "string",
-            "required": True,
-            "description": "사용자권한정보 (빈 문자열로 설정)",
-            "examples": [""]
-        },
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소코드",
-            "examples": ["NAS", "NYS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "symb": {
-            "type": "string",
-            "required": True,
-            "description": "종목코드 (티커 심볼)",
-            "examples": ["AAPL", "MSFT", "GOOGL", "TSLA"]
-        }
-    }
+    annotations=price_annotations
 )
 async def price(
     auth: str,  # 사용자권한정보
@@ -460,63 +418,7 @@ async def price(
 @mcp.tool(
     name="brknews-title",
     description="시세분석 > 해외속보(제목)",
-    annotations={
-        "fid_news_ofer_entp_code": {
-            "type": "string",
-            "required": True,
-            "description": "뉴스제공업체코드",
-            "examples": ["0"],
-            "enum": ["0:전체조회"]
-        },
-        "fid_cond_scr_div_code": {
-            "type": "string",
-            "required": True,
-            "description": "조건화면분류코드",
-            "examples": ["11801"]
-        },
-        "fid_cond_mrkt_cls_code": {
-            "type": "string",
-            "required": False,
-            "description": "조건시장구분코드 (선택사항)",
-            "examples": [""]
-        },
-        "fid_input_iscd": {
-            "type": "string",
-            "required": False,
-            "description": "입력종목코드 (선택사항)",
-            "examples": [""]
-        },
-        "fid_titl_cntt": {
-            "type": "string",
-            "required": False,
-            "description": "제목내용 (선택사항)",
-            "examples": [""]
-        },
-        "fid_input_date_1": {
-            "type": "string",
-            "required": False,
-            "description": "입력날짜1 (선택사항, YYYYMMDD 형식)",
-            "examples": ["", "20250101"]
-        },
-        "fid_input_hour_1": {
-            "type": "string",
-            "required": False,
-            "description": "입력시각1 (선택사항, HHMMSS 형식)",
-            "examples": ["", "120000"]
-        },
-        "fid_rank_sort_cls_code": {
-            "type": "string",
-            "required": False,
-            "description": "순위정렬구분코드 (선택사항)",
-            "examples": [""]
-        },
-        "fid_input_srno": {
-            "type": "string",
-            "required": False,
-            "description": "입력일련번호 (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=brknews_title_annotations
 )
 async def brknews_title(
     fid_news_ofer_entp_code: str,  # [필수] 뉴스제공업체코드
@@ -576,40 +478,7 @@ async def brknews_title(
 @mcp.tool(
     name="inquire-ccnl",
     description="기본시세 > 해외주식 체결추이",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "tday": {
-            "type": "string",
-            "required": True,
-            "description": "당일전일구분",
-            "examples": ["0", "1"],
-            "enum": ["0:전일", "1:당일"]
-        },
-        "symb": {
-            "type": "string",
-            "required": True,
-            "description": "종목코드 (해외종목코드)",
-            "examples": ["TSLA", "AAPL", "MSFT"]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=inquire_ccnl_annotations
 )
 async def inquire_ccnl(
     excd: str,         # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -657,27 +526,7 @@ async def inquire_ccnl(
 @mcp.tool(
     name="price-detail",
     description="기본시세 > 해외주식 현재가상세",
-    annotations={
-        "auth": {
-            "type": "string",
-            "required": True,
-            "description": "사용자권한정보 (빈 문자열로 설정)",
-            "examples": [""]
-        },
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "symb": {
-            "type": "string",
-            "required": True,
-            "description": "종목코드 (티커 심볼)",
-            "examples": ["TSLA", "AAPL", "MSFT", "GOOGL"]
-        }
-    }
+    annotations=price_detail_annotations
 )
 async def price_detail(
     auth: str,  # 사용자권한정보
@@ -720,58 +569,7 @@ async def price_detail(
 @mcp.tool(
     name="news-title",
     description="기본시세 > 해외주식 현재가상세",
-    annotations={
-        "info_gb": {
-            "type": "string",
-            "required": True,
-            "description": "뉴스구분",
-            "examples": ["", "1", "2"],
-            "enum": ["공백:전체", "1:종목뉴스", "2:일반뉴스"]
-        },
-        "class_cd": {
-            "type": "string",
-            "required": True,
-            "description": "중분류",
-            "examples": ["", "01", "02", "03"]
-        },
-        "nation_cd": {
-            "type": "string",
-            "required": True,
-            "description": "국가코드",
-            "examples": ["", "CN", "HK", "US"],
-            "enum": ["공백:전체", "CN:중국", "HK:홍콩", "US:미국", "JP:일본", "VN:베트남"]
-        },
-        "exchange_cd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소코드",
-            "examples": ["", "NYS", "NAS", "AMS"]
-        },
-        "symb": {
-            "type": "string",
-            "required": True,
-            "description": "종목코드 (티커 심볼)",
-            "examples": ["", "AAPL", "MSFT", "TSLA"]
-        },
-        "data_dt": {
-            "type": "string",
-            "required": True,
-            "description": "조회일자 (YYYYMMDD 형식)",
-            "examples": ["", "20250101", "20240315"]
-        },
-        "data_tm": {
-            "type": "string",
-            "required": True,
-            "description": "조회시간 (HHMMSS 형식)",
-            "examples": ["", "120000", "093000"]
-        },
-        "cts": {
-            "type": "string",
-            "required": True,
-            "description": "다음키 (연속조회용, 처음조회시 공백)",
-            "examples": ["", "20241014120000001"]
-        }
-    }
+    annotations=news_title_annotations
 )
 async def news_title(
     info_gb: str = "",  # [필수] 뉴스구분
@@ -820,65 +618,7 @@ async def news_title(
 @mcp.tool(
     name="inquire-time-itemchartprice",
     description="기본시세 > 해외주식분봉조회 데이터",
-    annotations={
-        "auth": {
-            "type": "string",
-            "required": True,
-            "description": "사용자권한정보 (공백으로 입력)",
-            "examples": [""]
-        },
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소코드",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄", "BAY:뉴욕(주간)", "BAQ:나스닥(주간)", "BAA:아멕스(주간)"]
-        },
-        "symb": {
-            "type": "string",
-            "required": True,
-            "description": "종목코드",
-            "examples": ["TSLA", "AAPL", "MSFT"]
-        },
-        "nmin": {
-            "type": "string",
-            "required": True,
-            "description": "분단위 (1: 1분봉, 2: 2분봉, 5: 5분봉 등)",
-            "examples": ["1", "5", "15", "30"]
-        },
-        "pinc": {
-            "type": "string",
-            "required": True,
-            "description": "전일포함여부",
-            "examples": ["0", "1"],
-            "enum": ["0:당일", "1:전일포함 (다음조회 시 반드시 1로 입력)"]
-        },
-        "next": {
-            "type": "string",
-            "required": True,
-            "description": "다음여부",
-            "examples": ["", "1"],
-            "enum": ["공백:처음조회", "1:다음조회"]
-        },
-        "nrec": {
-            "type": "string",
-            "required": True,
-            "description": "요청갯수 (최대 120)",
-            "examples": ["120", "100", "50"]
-        },
-        "fill": {
-            "type": "string",
-            "required": True,
-            "description": "미체결채움구분 (공백으로 입력)",
-            "examples": [""]
-        },
-        "keyb": {
-            "type": "string",
-            "required": True,
-            "description": "NEXT KEY BUFF (처음조회시 공백, 다음조회시 YYYYMMDDHHMMSS 형식)",
-            "examples": ["", "20241014140100"]
-        }
-    }
+    annotations=inquire_time_itemchartprice_annotations
 )
 async def inquire_time_itemchartprice(
     auth: str,  # 사용자권한정보
@@ -948,35 +688,7 @@ async def inquire_time_itemchartprice(
 @mcp.tool(
     name="inquire-time-indexchartprice",
     description="기본시세 > 해외지수분봉조회 데이터",
-    annotations={
-        "fid_cond_mrkt_div_code": {
-            "type": "string",
-            "required": True,
-            "description": "조건 시장 분류 코드",
-            "examples": ["N", "X", "KX"],
-            "enum": ["N:해외지수", "X:환율", "KX:원화환율"]
-        },
-        "fid_input_iscd": {
-            "type": "string",
-            "required": True,
-            "description": "입력 종목코드 (지수 심볼)",
-            "examples": ["SPX", "IXIC", "DJI", "NDX"]
-        },
-        "fid_hour_cls_code": {
-            "type": "string",
-            "required": True,
-            "description": "시간 구분 코드",
-            "examples": ["0", "1"],
-            "enum": ["0:정규장", "1:시간외"]
-        },
-        "fid_pw_data_incu_yn": {
-            "type": "string",
-            "required": True,
-            "description": "과거 데이터 포함 여부",
-            "examples": ["Y", "N"],
-            "enum": ["Y:포함", "N:미포함"]
-        }
-    }
+    annotations=inquire_time_indexchartprice_annotations
 )
 async def inquire_time_indexchartprice(
     fid_cond_mrkt_div_code: str,  # 조건 시장 분류 코드
@@ -1028,171 +740,7 @@ async def inquire_time_indexchartprice(
 @mcp.tool(
     name="inquire-search",
     description="시세분석 > 해외주식조건검색",
-    annotations={
-        "auth": {
-            "type": "string",
-            "required": True,
-            "description": "사용자권한정보 (빈 문자열로 설정)",
-            "examples": [""]
-        },
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소코드",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "co_yn_pricecur": {
-            "type": "string",
-            "required": True,
-            "description": "현재가선택조건 (해당조건 사용시: 1, 미사용시: 공백)",
-            "examples": ["1", ""]
-        },
-        "co_st_pricecur": {
-            "type": "string",
-            "required": False,
-            "description": "현재가시작범위가 (각국통화: JPY, USD, HKD, CNY, VND)",
-            "examples": ["100", "50.5"]
-        },
-        "co_en_pricecur": {
-            "type": "string",
-            "required": False,
-            "description": "현재가끝범위가 (각국통화: JPY, USD, HKD, CNY, VND)",
-            "examples": ["500", "200.0"]
-        },
-        "co_yn_rate": {
-            "type": "string",
-            "required": True,
-            "description": "등락율선택조건 (해당조건 사용시: 1, 미사용시: 공백)",
-            "examples": ["1", ""]
-        },
-        "co_st_rate": {
-            "type": "string",
-            "required": False,
-            "description": "등락율시작율 (% 단위)",
-            "examples": ["-10", "5.5"]
-        },
-        "co_en_rate": {
-            "type": "string",
-            "required": False,
-            "description": "등락율끝율 (% 단위)",
-            "examples": ["10", "15.0"]
-        },
-        "co_yn_valx": {
-            "type": "string",
-            "required": True,
-            "description": "시가총액선택조건 (해당조건 사용시: 1, 미사용시: 공백)",
-            "examples": ["1", ""]
-        },
-        "co_st_valx": {
-            "type": "string",
-            "required": False,
-            "description": "시가총액시작액 (천 단위)",
-            "examples": ["1000000", "500000"]
-        },
-        "co_en_valx": {
-            "type": "string",
-            "required": False,
-            "description": "시가총액끝액 (천 단위)",
-            "examples": ["10000000", "5000000"]
-        },
-        "co_yn_shar": {
-            "type": "string",
-            "required": True,
-            "description": "발행주식수선택조건 (해당조건 사용시: 1, 미사용시: 공백)",
-            "examples": ["1", ""]
-        },
-        "co_st_shar": {
-            "type": "string",
-            "required": False,
-            "description": "발행주식시작수 (천 단위)",
-            "examples": ["1000", "500"]
-        },
-        "co_en_shar": {
-            "type": "string",
-            "required": False,
-            "description": "발행주식끝수 (천 단위)",
-            "examples": ["10000", "5000"]
-        },
-        "co_yn_volume": {
-            "type": "string",
-            "required": True,
-            "description": "거래량선택조건 (해당조건 사용시: 1, 미사용시: 공백)",
-            "examples": ["1", ""]
-        },
-        "co_st_volume": {
-            "type": "string",
-            "required": False,
-            "description": "거래량시작량 (주 단위)",
-            "examples": ["100000", "50000"]
-        },
-        "co_en_volume": {
-            "type": "string",
-            "required": False,
-            "description": "거래량끝량 (주 단위)",
-            "examples": ["1000000", "500000"]
-        },
-        "co_yn_amt": {
-            "type": "string",
-            "required": True,
-            "description": "거래대금선택조건 (해당조건 사용시: 1, 미사용시: 공백)",
-            "examples": ["1", ""]
-        },
-        "co_st_amt": {
-            "type": "string",
-            "required": False,
-            "description": "거래대금시작금 (천 단위)",
-            "examples": ["1000", "500"]
-        },
-        "co_en_amt": {
-            "type": "string",
-            "required": False,
-            "description": "거래대금끝금 (천 단위)",
-            "examples": ["10000", "5000"]
-        },
-        "co_yn_eps": {
-            "type": "string",
-            "required": True,
-            "description": "EPS선택조건 (해당조건 사용시: 1, 미사용시: 공백)",
-            "examples": ["1", ""]
-        },
-        "co_st_eps": {
-            "type": "string",
-            "required": False,
-            "description": "EPS시작값",
-            "examples": ["1.0", "0.5"]
-        },
-        "co_en_eps": {
-            "type": "string",
-            "required": False,
-            "description": "EPS끝값",
-            "examples": ["10.0", "5.0"]
-        },
-        "co_yn_per": {
-            "type": "string",
-            "required": True,
-            "description": "PER선택조건 (해당조건 사용시: 1, 미사용시: 공백)",
-            "examples": ["1", ""]
-        },
-        "co_st_per": {
-            "type": "string",
-            "required": False,
-            "description": "PER시작값",
-            "examples": ["5", "10"]
-        },
-        "co_en_per": {
-            "type": "string",
-            "required": False,
-            "description": "PER끝값",
-            "examples": ["20", "50"]
-        },
-        "keyb": {
-            "type": "string",
-            "required": True,
-            "description": "NEXT KEY BUFF (공백 입력)",
-            "examples": [""]
-        }
-    }
+    annotations=inquire_search_annotations
 )
 async def inquire_search(
     auth: str,  # 사용자권한정보
@@ -1304,21 +852,7 @@ async def inquire_search(
 @mcp.tool(
     name="search-info",
     description="기본시세 > 해외주식 상품기본정보",
-    annotations={
-        "prdt_type_cd": {
-            "type": "string",
-            "required": True,
-            "description": "상품유형코드",
-            "examples": ["512", "513", "515"],
-            "enum": ["512:미국 나스닥", "513:미국 뉴욕", "529:미국 아멕스", "515:일본", "501:홍콩", "543:홍콩CNY", "558:홍콩USD", "507:베트남 하노이", "508:베트남 호치민", "551:중국 상해A", "552:중국 심천A"]
-        },
-        "pdno": {
-            "type": "string",
-            "required": True,
-            "description": "상품번호 (종목코드/티커)",
-            "examples": ["AAPL", "MSFT", "TSLA", "GOOGL"]
-        }
-    }
+    annotations=search_info_annotations
 )
 async def search_info(
     prdt_type_cd: str,  # 상품유형코드
@@ -1362,47 +896,7 @@ async def search_info(
 @mcp.tool(
     name="dailyprice",
     description="기본시세 > 해외주식 기간별시세",
-    annotations={
-        "auth": {
-            "type": "string",
-            "required": True,
-            "description": "사용자권한정보 (빈 문자열로 설정)",
-            "examples": [""]
-        },
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소코드",
-            "examples": ["NAS", "NYS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "symb": {
-            "type": "string",
-            "required": True,
-            "description": "종목코드 (티커 심볼)",
-            "examples": ["TSLA", "AAPL", "MSFT"]
-        },
-        "gubn": {
-            "type": "string",
-            "required": True,
-            "description": "일/주/월구분",
-            "examples": ["0", "1", "2"],
-            "enum": ["0:일", "1:주", "2:월"]
-        },
-        "bymd": {
-            "type": "string",
-            "required": True,
-            "description": "조회기준일자 (YYYYMMDD 형식)",
-            "examples": ["20230101", "20241201"]
-        },
-        "modp": {
-            "type": "string",
-            "required": True,
-            "description": "수정주가반영여부",
-            "examples": ["0", "1"],
-            "enum": ["0:미반영", "1:반영"]
-        }
-    }
+    annotations=dailyprice_annotations
 )
 async def dailyprice(
     auth: str,  # 사용자권한정보
@@ -1463,40 +957,7 @@ async def dailyprice(
 @mcp.tool(
     name="industry-theme",
     description="기본시세 > 해외주식 업종별시세",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "icod": {
-            "type": "string",
-            "required": True,
-            "description": "업종코드",
-            "examples": ["001", "002", "003"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "2", "3", "4", "5", "6"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=industry_theme_annotations
 )
 async def industry_theme(
     excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -1547,27 +1008,7 @@ async def industry_theme(
 @mcp.tool(
     name="inquire-asking-price",
     description="기본시세 > 해외주식 업종별시세",
-    annotations={
-        "auth": {
-            "type": "string",
-            "required": True,
-            "description": "사용자권한정보 (빈 문자열로 설정)",
-            "examples": [""]
-        },
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소코드",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "symb": {
-            "type": "string",
-            "required": True,
-            "description": "종목코드 (티커 심볼)",
-            "examples": ["TSLA", "AAPL", "MSFT", "GOOGL"]
-        }
-    }
+    annotations=inquire_asking_price_annotations
 )
 async def inquire_asking_price(
     auth: str,  # 사용자권한정보
@@ -1614,40 +1055,7 @@ async def inquire_asking_price(
 @mcp.tool(
     name="quot-inquire-ccnl",
     description="기본시세 > 해외주식 체결추이",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "tday": {
-            "type": "string",
-            "required": True,
-            "description": "당일전일구분",
-            "examples": ["0", "1"],
-            "enum": ["0:전일", "1:당일"]
-        },
-        "symb": {
-            "type": "string",
-            "required": True,
-            "description": "종목코드 (해외종목코드)",
-            "examples": ["TSLA", "AAPL", "MSFT", "GOOGL"]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=quot_inquire_ccnl_annotations
 )
 async def quot_inquire_ccnl(
     excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -1698,40 +1106,7 @@ async def quot_inquire_ccnl(
 @mcp.tool(
     name="inquire-daily-chartprice",
     description="기본시세 > 해외주식 종목_지수_환율기간별시세(일_주_월_년)",
-    annotations={
-        "fid_cond_mrkt_div_code": {
-            "type": "string",
-            "required": True,
-            "description": "FID 조건 시장 분류 코드",
-            "examples": ["N", "X", "I", "S"],
-            "enum": ["N:해외지수", "X:환율", "I:국채", "S:금선물"]
-        },
-        "fid_input_iscd": {
-            "type": "string",
-            "required": True,
-            "description": "FID 입력 종목코드 (해외지수 코드)",
-            "examples": [".DJI", ".IXIC", ".SPX", ".NDX"]
-        },
-        "fid_input_date_1": {
-            "type": "string",
-            "required": True,
-            "description": "FID 입력 날짜1 (시작일자, YYYYMMDD 형식)",
-            "examples": ["20240101", "20230401"]
-        },
-        "fid_input_date_2": {
-            "type": "string",
-            "required": True,
-            "description": "FID 입력 날짜2 (종료일자, YYYYMMDD 형식)",
-            "examples": ["20241231", "20230630"]
-        },
-        "fid_period_div_code": {
-            "type": "string",
-            "required": True,
-            "description": "FID 기간 분류 코드",
-            "examples": ["D", "W", "M", "Y"],
-            "enum": ["D:일", "W:주", "M:월", "Y:년"]
-        }
-    }
+    annotations=inquire_daily_chartprice_annotations
 )
 async def inquire_daily_chartprice(
     fid_cond_mrkt_div_code: str,  # FID 조건 시장 분류 코드
@@ -1792,21 +1167,7 @@ async def inquire_daily_chartprice(
 @mcp.tool(
     name="industry-price",
     description="기본시세 > 해외주식 업종별코드조회",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=industry_price_annotations
 )
 async def industry_price(
     excd: str,  # [필수] 거래소명
@@ -1843,41 +1204,7 @@ async def industry_price(
 @mcp.tool(
     name="volume-surge",
     description="시세분석 > 해외주식 거래량급증",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "mixn": {
-            "type": "string",
-            "required": True,
-            "description": "N분전코드값",
-            "examples": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
-            "enum": ["0:1분전", "1:2분전", "2:3분전", "3:5분전", "4:10분전", "5:15분전", "6:20분전", "7:30분전", "8:60분전", "9:120분전"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "2", "3", "4", "5", "6"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF (선택사항)",
-            "examples": [""]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=volume_surge_annotations
 )
 async def volume_surge(
     excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -1930,41 +1257,7 @@ async def volume_surge(
 @mcp.tool(
     name="volume-power",
     description="시세분석 > 해외주식 매수체결강도상위",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "nday": {
-            "type": "string",
-            "required": True,
-            "description": "N일자값",
-            "examples": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
-            "enum": ["0:당일", "1:2일", "2:3일", "3:5일", "4:10일", "5:20일전", "6:30일", "7:60일", "8:120일", "9:1년"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "2", "3", "4", "5", "6"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=volume_power_annotations
 )
 async def volume_power(
     excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -1997,7 +1290,6 @@ async def volume_power(
 
     if vol_rang == "":
         raise ValueError("vol_rang is required (e.g. '0')")
-
     tr_id = "HHDFS76280000"
     api_url = "/uapi/overseas-stock/v1/ranking/volume-power"
 
@@ -2018,48 +1310,7 @@ async def volume_power(
 @mcp.tool(
     name="updown-rate",
     description="시세분석 > 해외주식 상승률/하락률",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "nday": {
-            "type": "string",
-            "required": True,
-            "description": "N일자값",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:당일", "1:2일", "2:3일", "3:5일", "4:10일", "5:20일전", "6:30일", "7:60일", "8:120일", "9:1년"]
-        },
-        "gubn": {
-            "type": "string",
-            "required": True,
-            "description": "상승률/하락률 구분",
-            "examples": ["0", "1"],
-            "enum": ["0:하락률", "1:상승률"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=updown_rate_annotations
 )
 async def updown_rate(
     excd: str,  # [필수] 거래소명
@@ -2120,53 +1371,7 @@ async def updown_rate(
 @mcp.tool(
     name="trade-vol",
     description="시세분석 > 해외주식 거래량순위",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "nday": {
-            "type": "string",
-            "required": True,
-            "description": "N분전코드값",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:당일", "1:2일전", "2:3일전", "3:5일전", "4:10일전", "5:20일전", "6:30일전", "7:60일전", "8:120일전", "9:1년전"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF (선택사항)",
-            "examples": [""]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        },
-        "prc1": {
-            "type": "string",
-            "required": False,
-            "description": "가격 필터 시작 (선택사항)",
-            "examples": [""]
-        },
-        "prc2": {
-            "type": "string",
-            "required": False,
-            "description": "가격 필터 종료 (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=trade_vol_annotations
 )
 async def trade_vol(
     excd: str,  # 거래소명
@@ -2229,41 +1434,7 @@ async def trade_vol(
 @mcp.tool(
     name="trade-turnover",
     description="시세분석 > 해외주식 거래회전율순위",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "nday": {
-            "type": "string",
-            "required": True,
-            "description": "N분전코드보값",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:당일", "1:2일전", "2:3일전", "3:5일전", "4:10일전", "5:20일전", "6:30일전", "7:60일전", "8:120일전", "9:1년전"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF",
-            "examples": [""]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보",
-            "examples": [""]
-        }
-    }
+    annotations=trade_turnover_annotations
 )
 async def trade_turnover(
     excd: str,  # 거래소명
@@ -2320,53 +1491,7 @@ async def trade_turnover(
 @mcp.tool(
     name="trade-pbmn",
     description="시세분석 > 해외주식 거래대금순위",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "nday": {
-            "type": "string",
-            "required": True,
-            "description": "N일자값",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:당일", "1:2일", "2:3일", "3:5일", "4:10일", "5:20일전", "6:30일", "7:60일", "8:120일", "9:1년"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보",
-            "examples": [""]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF",
-            "examples": [""]
-        },
-        "prc1": {
-            "type": "string",
-            "required": False,
-            "description": "현재가 필터범위 시작",
-            "examples": [""]
-        },
-        "prc2": {
-            "type": "string",
-            "required": False,
-            "description": "현재가 필터범위 끝",
-            "examples": [""]
-        }
-    }
+    annotations=trade_pbmn_annotations
 )
 async def trade_pbmn(
     excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -2426,41 +1551,7 @@ async def trade_pbmn(
 @mcp.tool(
     name="trade-growth",
     description="시세분석 > 해외주식 거래증가율순위",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "nday": {
-            "type": "string",
-            "required": True,
-            "description": "N일자값",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:당일", "1:2일", "2:3일", "3:5일", "4:10일", "5:20일전", "6:30일", "7:60일", "8:120일", "9:1년"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보",
-            "examples": [""]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF",
-            "examples": [""]
-        }
-    }
+    annotations=trade_growth_annotations
 )
 async def trade_growth(
     excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -2513,48 +1604,7 @@ async def trade_growth(
 @mcp.tool(
     name="price-fluct",
     description="시세분석 > 해외주식 가격급등락",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "gubn": {
-            "type": "string",
-            "required": True,
-            "description": "급등/급락구분",
-            "examples": ["0", "1"],
-            "enum": ["0:급락", "1:급등"]
-        },
-        "mixn": {
-            "type": "string",
-            "required": True,
-            "description": "N분전코드보값",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:1분전", "1:2분전", "2:3분전", "3:5분전", "4:10분전", "5:15분전", "6:20분전", "7:30분전", "8:60분전", "9:120분전"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF",
-            "examples": [""]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보",
-            "examples": [""]
-        }
-    }
+    annotations=price_fluct_annotations
 )
 async def price_fluct(
     excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -2613,55 +1663,7 @@ async def price_fluct(
 @mcp.tool(
     name="new-highlow",
     description="시세분석 > 해외주식 신고/신저가",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "mixn": {
-            "type": "string",
-            "required": True,
-            "description": "N분전코드보값",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:1분전", "1:2분전", "2:3분전", "3:5분전", "4:10분전", "5:15분전", "6:20분전", "7:30분전", "8:60분전", "9:120분전"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "gubn": {
-            "type": "string",
-            "required": True,
-            "description": "신고/신저 구분",
-            "examples": ["0", "1"],
-            "enum": ["0:신저", "1:신고"]
-        },
-        "gubn2": {
-            "type": "string",
-            "required": True,
-            "description": "일시돌파/돌파 구분",
-            "examples": ["0", "1"],
-            "enum": ["0:일시돌파0", "1:돌파유지1"]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF",
-            "examples": [""]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보",
-            "examples": [""]
-        }
-    }
+    annotations=new_highlow_annotations
 )
 async def new_highlow(
     excd: str,  # [필수] 거래소명 (ex. NYS:뉴욕, NAS:나스닥, AMS:아멕스, HKS:홍콩, SHS:상해, SZS:심천, HSX:호치민, HNX:하노이, TSE:도쿄)
@@ -2726,34 +1728,7 @@ async def new_highlow(
 @mcp.tool(
     name="market-cap",
     description="시세분석 > 해외주식 시가총액순위",
-    annotations={
-        "excd": {
-            "type": "string",
-            "required": True,
-            "description": "거래소명",
-            "examples": ["NYS", "NAS", "AMS"],
-            "enum": ["NYS:뉴욕", "NAS:나스닥", "AMS:아멕스", "HKS:홍콩", "SHS:상해", "SZS:심천", "HSX:호치민", "HNX:하노이", "TSE:도쿄"]
-        },
-        "vol_rang": {
-            "type": "string",
-            "required": True,
-            "description": "거래량조건",
-            "examples": ["0", "1", "3"],
-            "enum": ["0:전체", "1:1백주이상", "2:1천주이상", "3:1만주이상", "4:10만주이상", "5:100만주이상", "6:1000만주이상"]
-        },
-        "keyb": {
-            "type": "string",
-            "required": False,
-            "description": "NEXT KEY BUFF (선택사항)",
-            "examples": [""]
-        },
-        "auth": {
-            "type": "string",
-            "required": False,
-            "description": "사용자권한정보 (선택사항)",
-            "examples": [""]
-        }
-    }
+    annotations=market_cap_annotations
 )
 async def market_cap(
     excd: str,  # 거래소명
